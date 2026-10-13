@@ -174,6 +174,8 @@ async function loadMessages(){
   const { data } = await supabaseClient.from('messages').select('*').eq('room_id', currentRoom).order('created_at',{ascending:true});
   chatMessages.innerHTML=""; if(data) data.forEach(m=> appendMessageToFeed(m.text, m.file_url, m.file_type, m.sender_name, m.avatar_url, m.sender_name===currentUser, m.created_at, m.id));
   currentRoomLabel.textContent=`Room: ${currentRoom} | You: ${currentUser||'Guest'}`;
+    clearBadge();
+  createBadgeUI();
 }
 
 function appendMessageToFeed(text, fileUrl, fileType, senderName, avatarUrl, isOwn=false, createdAt=null, messageId=null){
@@ -273,7 +275,17 @@ function connectToRealtimeStream(){
   realtimeChannel=supabaseClient.channel(`chat-${currentRoom}-${Date.now()}`)
 .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},p=>{
       if(p.new.room_id!==currentRoom) return;
-      appendMessageToFeed(p.new.text, p.new.file_url, p.new.file_type, p.new.sender_name, p.new.avatar_url, p.new.sender_name===currentUser, p.new.created_at, p.new.id);
+      const isOwn = p.new.sender_name === currentUser;
+      appendMessageToFeed(p.new.text, p.new.file_url, p.new.file_type, p.new.sender_name, p.new.avatar_url, isOwn, p.new.created_at, p.new.id);
+      if(!isOwn){
+        playNativeChime();
+        // Only show badge if user is not at bottom or tab is hidden
+        const atBottom = chatMessages.scrollTop + chatMessages.clientHeight >= chatMessages.scrollHeight - 120;
+        const hidden = document.hidden;
+        if(hidden || !atBottom){
+          incrementBadge();
+        }
+      }
     })
 .on('postgres_changes',{event:'DELETE',schema:'public',table:'messages'},p=>{
       const el = chatMessages.querySelector(`[data-id="${p.old.id}"]`); if(el) el.parentElement.remove();
@@ -437,3 +449,75 @@ if(changeProfileBtn){
 
 window.addEventListener('DOMContentLoaded', () => { chatInput.value = ""; if(roomInput) roomInput.value = ""; });
 chatInput.value = ""; if(roomInput) roomInput.value = "";
+// --- NATIVE CHIME + BADGE SYSTEM ---
+let unreadCount = 0;
+let notifAudioCtx = null;
+
+function initChime() {
+  try { notifAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){}
+}
+
+function playNativeChime() {
+  try {
+    if(!notifAudioCtx) initChime();
+    if(!notifAudioCtx) return;
+    // Native iOS-like tri-tone chime using WebAudio (no file needed)
+    const now = notifAudioCtx.currentTime;
+    [523.25, 659.25, 783.99].forEach((freq, i) => {
+      const o = notifAudioCtx.createOscillator();
+      const g = notifAudioCtx.createGain();
+      o.type = 'sine';
+      o.frequency.value = freq;
+      o.connect(g); g.connect(notifAudioCtx.destination);
+      g.gain.setValueAtTime(0, now + i*0.08);
+      g.gain.linearRampToValueAtTime(0.25, now + i*0.08 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, now + i*0.08 + 0.35);
+      o.start(now + i*0.08); o.stop(now + i*0.08 + 0.4);
+    });
+    // Haptic if mobile
+    if(navigator.vibrate) navigator.vibrate(60);
+  } catch(e){}
+}
+
+function createBadgeUI(){
+  if(document.getElementById('chat-notif-badge')) return;
+  const label = document.getElementById('current-room-label') || document.querySelector('.top-bar');
+  if(!label) return;
+  label.style.position = 'relative';
+  const badge = document.createElement('span');
+  badge.id = 'chat-notif-badge';
+  badge.textContent = '0';
+  badge.style.cssText = 'position:absolute; top:-6px; right:-10px; background:#ff3b30; color:white; font-size:11px; font-weight:bold; min-width:18px; height:18px; border-radius:9px; display:none; align-items:center; justify-content:center; padding:0 5px; z-index:9;';
+  label.appendChild(badge);
+  // Also favicon badge via title
+}
+createBadgeUI();
+
+function updateBadge(count){
+  unreadCount = count;
+  const badge = document.getElementById('chat-notif-badge');
+  if(!badge) return;
+  if(count > 0){
+    badge.textContent = count > 99 ? '99+' : count;
+    badge.style.display = 'flex';
+    document.title = `(${count}) New message - ${currentRoom}`;
+  } else {
+    badge.style.display = 'none';
+    document.title = `Room: ${currentRoom}`;
+  }
+}
+
+function incrementBadge(){
+  updateBadge(unreadCount + 1);
+}
+function clearBadge(){
+  updateBadge(0);
+}
+
+// Clear badge when user interacts
+document.addEventListener('click', ()=>{ if(notifAudioCtx && notifAudioCtx.state === 'suspended') notifAudioCtx.resume(); });
+if(chatMessages) chatMessages.addEventListener('scroll', ()=>{ 
+  const atBottom = chatMessages.scrollTop + chatMessages.clientHeight >= chatMessages.scrollHeight - 50;
+  if(atBottom) clearBadge();
+});
+if(chatInput) chatInput.addEventListener('focus', clearBadge);
