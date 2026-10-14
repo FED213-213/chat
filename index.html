@@ -21,10 +21,15 @@
     #room-input { padding:7px 10px; border-radius:8px; border:none; width:110px; flex-shrink:0; }
     #join-btn { background:white; color:#4a148c; border:none; padding:7px 12px; border-radius:8px; cursor:pointer; font-weight:bold; flex-shrink:0; }
     #current-room-label { font-weight:600; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; font-size:14px; }
+
+    #online-count{ background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.3); padding:5px 10px; border-radius:20px; font-size:12px; display:flex; align-items:center; gap:6px; flex-shrink:0; cursor:pointer; font-weight:600; }
+    #online-count .dot{ width:8px; height:8px; background:#00e676; border-radius:50%; box-shadow:0 0 6px #00e676; animation:pulse 2s infinite; }
+    @keyframes pulse{ 0%{opacity:1} 50%{opacity:0.6} 100%{opacity:1} }
+
     #change-profile-btn { background:rgba(255,255,255,0.2); border:none; color:white; width:36px; height:36px; border-radius:50%; cursor:pointer; font-size:18px; flex-shrink:0; }
 
     /* MOBILE DRAWER */
-    #mobile-drawer{ position:fixed; top:0; left:0; right:0; background:#4a148c; color:white; z-index:9999; padding:16px; transform:translateY(-100%); transition:0.3s ease; box-shadow:0 8px 20px rgba(0,0,0,0.3); border-radius:0 0 16px 16px; }
+    #mobile-drawer{ position:fixed; top:0; left:0; right:0; background:#4a148c; color:white; z-index:9999; padding:16px; transform:translateY(-100%); transition:0.3s ease; box-shadow:0 8px 20px rgba(0,0,0,0.3); border-radius:0 0 16px 16px; max-height:90vh; overflow-y:auto; }
     #mobile-drawer.open{ transform:translateY(0); }
     #mobile-drawer .drawer-row{ display:flex; gap:8px; margin:10px 0; }
     #mobile-drawer input{ flex:1; padding:10px; border-radius:10px; border:none; }
@@ -38,17 +43,22 @@
     #chat-input { flex:1; min-width:0; padding:11px 14px; border-radius:22px; border:1px solid #ccc; outline:none; font-size:16px; }
     #send-btn { background:#4a148c; color:white; border:none; padding:10px 18px; border-radius:22px; cursor:pointer; flex-shrink:0; font-weight:bold; }
 
-    /* RESPONSIVE */
+    /* ONLINE POPUP */
+    #online-popup{ position:fixed; top:60px; right:10px; width:300px; background:white; border-radius:16px; box-shadow:0 12px 30px rgba(0,0,0,0.25); z-index:9998; display:none; overflow:hidden; }
+    #online-popup.open{ display:block; }
+    #online-popup-header{ background:#4a148c; color:white; padding:12px 14px; font-weight:bold; display:flex; justify-content:space-between; align-items:center; }
+    
     @media (max-width: 680px){
       #menu-toggle{ display:flex; align-items:center; justify-content:center; }
       #general-btn, #room-input, #join-btn{ display:none; }
-      #current-room-label{ font-size:13px; }
-      #chat-input{ font-size:16px; } /* prevents zoom on iPhone */
+      #current-room-label{ font-size:12px; }
+      #online-count{ padding:4px 8px; font-size:11px; }
+      #chat-input{ font-size:16px; }
       #chat-messages{ padding:10px; }
       .bottom-bar{ gap:4px; padding:6px 8px; }
       .bottom-bar button.icon-btn{ width:36px; height:36px; font-size:18px; }
+      #online-popup{ right:5px; left:5px; width:auto; top:55px; }
     }
-
     .hidden { display:none!important; }
   </style>
 </head>
@@ -60,7 +70,25 @@
   <input type="text" id="room-input" placeholder="Room name" autocomplete="off">
   <button id="join-btn" type="button">Join</button>
   <span id="current-room-label">Room: general | You: Guest</span>
+  
+  <!-- ONLINE COUNT BADGE - NEW -->
+  <div id="online-count" title="Who's online">
+    <span class="dot"></span>
+    <span id="online-number">0 online</span>
+  </div>
+
   <button id="change-profile-btn" type="button" title="Profile">⚙️</button>
+</div>
+
+<!-- ONLINE POPUP - NEW -->
+<div id="online-popup">
+  <div id="online-popup-header">
+    <span>🟢 Online in this room</span>
+    <button id="online-popup-close" style="background:rgba(255,255,255,0.2); border:none; color:white; width:28px; height:28px; border-radius:50%; cursor:pointer;">✕</button>
+  </div>
+  <div id="online-users-container" style="padding:10px; max-height:280px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+    <div style="font-size:13px; color:#888; text-align:center; padding:20px;">No one online yet...</div>
+  </div>
 </div>
 
 <!-- MOBILE MENU DRAWER -->
@@ -68,6 +96,18 @@
   <button id="drawer-close" type="button">✕</button>
   <div style="font-weight:bold; font-size:18px; margin-bottom:4px;">Private Room Chat</div>
   <div id="drawer-info" style="opacity:0.9; font-size:13px; margin-bottom:12px;">Room: general | You: Guest</div>
+  
+  <!-- ONLINE LIST IN DRAWER - NEW -->
+  <div id="online-list-drawer" style="margin:12px 0; background:rgba(0,0,0,0.25); border-radius:12px; padding:10px;">
+    <div style="font-size:12px; font-weight:bold; opacity:0.9; margin-bottom:8px; display:flex; justify-content:space-between;">
+      <span>🟢 Online Now</span>
+      <span id="online-number-drawer">0</span>
+    </div>
+    <div id="online-users-container-drawer" style="display:flex; flex-direction:column; gap:6px; max-height:140px; overflow-y:auto;">
+      <div style="font-size:12px; opacity:0.6;">Loading...</div>
+    </div>
+  </div>
+
   <div class="drawer-row">
     <button id="drawer-general" type="button" style="background:#2e0a5c; color:white; flex:1;"># General</button>
     <button id="drawer-profile" type="button" style="background:rgba(255,255,255,0.2); color:white;">⚙️ Profile</button>
@@ -116,12 +156,25 @@
 
 <script src="chat.js"></script>
 <script>
-// Mobile drawer logic - works with your chat.js
+// Mobile drawer logic + ONLINE logic
 const menuToggle = document.getElementById('menu-toggle');
 const drawer = document.getElementById('mobile-drawer');
 const drawerClose = document.getElementById('drawer-close');
+const onlineCountBtn = document.getElementById('online-count');
+const onlinePopup = document.getElementById('online-popup');
+const onlinePopupClose = document.getElementById('online-popup-close');
+
 menuToggle.addEventListener('click', ()=> drawer.classList.add('open'));
 drawerClose.addEventListener('click', ()=> drawer.classList.remove('open'));
+
+// Click online badge to show popup
+onlineCountBtn.addEventListener('click', ()=>{
+  onlinePopup.classList.toggle('open');
+});
+onlinePopupClose.addEventListener('click', ()=>{
+  onlinePopup.classList.remove('open');
+});
+
 document.getElementById('drawer-general').addEventListener('click', ()=>{
   document.getElementById('general-btn').click();
   drawer.classList.remove('open');
@@ -136,11 +189,17 @@ document.getElementById('drawer-profile').addEventListener('click', ()=>{
   document.getElementById('change-profile-btn').click();
   drawer.classList.remove('open');
 });
-// Sync label to drawer
 setInterval(()=>{
   const label = document.getElementById('current-room-label').innerText;
   document.getElementById('drawer-info').innerText = label;
 }, 500);
+
+// Close popup when clicking outside
+document.addEventListener('click', (e)=>{
+  if(!onlinePopup.contains(e.target) && !onlineCountBtn.contains(e.target)){
+    onlinePopup.classList.remove('open');
+  }
+});
 </script>
 
 </body>
