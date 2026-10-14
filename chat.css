@@ -165,3 +165,18 @@ body {
   font-size: 11px;
   font-weight: bold;
 }
+#drawer-join{
+  background:#4a148c;
+  color:white;
+  border:none;
+  padding:10px 16px;
+  border-radius:8px;
+  cursor:pointer;
+  transition: all 0.2s ease;
+}
+#drawer-join:hover{
+  background:#9c02fc;
+  color: white;
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(74,20,140,0.3);
+}
