@@ -9,82 +9,76 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-mart@latest/css/emoji-mart.css">
- <style>
-    body { margin:0; height:100vh; display:flex; flex-direction:column; background:#efe7dd; overflow:hidden; }
-    .top-bar { background:#4a148c; color:white; padding:10px 15px; display:flex; align-items:center; gap:10px; }
-    #current-room-label { font-weight:bold; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  
+  <style>
+    *{box-sizing:border-box}
+    body { margin:0; height:100vh; height:100dvh; display:flex; flex-direction:column; background:#efe7dd; overflow:hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    
+    .top-bar { background:#4a148c; color:white; padding:10px 12px; display:flex; align-items:center; gap:8px; flex-shrink:0; }
+    #menu-toggle{ background:rgba(255,255,255,0.2); border:none; color:white; width:38px; height:38px; border-radius:8px; cursor:pointer; font-size:22px; display:none; flex-shrink:0; }
+    #general-btn { background:#2e0a5c; color:white; border:1px solid rgba(255,255,255,0.3); padding:6px 12px; border-radius:20px; cursor:pointer; font-weight:bold; flex-shrink:0; }
+    #room-input { padding:7px 10px; border-radius:8px; border:none; width:110px; flex-shrink:0; }
+    #join-btn { background:white; color:#4a148c; border:none; padding:7px 12px; border-radius:8px; cursor:pointer; font-weight:bold; flex-shrink:0; }
+    #current-room-label { font-weight:600; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; font-size:14px; }
     #change-profile-btn { background:rgba(255,255,255,0.2); border:none; color:white; width:36px; height:36px; border-radius:50%; cursor:pointer; font-size:18px; flex-shrink:0; }
-    #chat-messages { flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; gap:12px; }
-    .bottom-bar { background:#f0f0f0; padding:8px 10px; display:flex; gap:6px; align-items:center; position:relative; }
-    .bottom-bar button.icon-btn { width:38px; height:38px; border-radius:50%; border:none; background:transparent; font-size:20px; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+
+    /* MOBILE DRAWER */
+    #mobile-drawer{ position:fixed; top:0; left:0; right:0; background:#4a148c; color:white; z-index:9999; padding:16px; transform:translateY(-100%); transition:0.3s ease; box-shadow:0 8px 20px rgba(0,0,0,0.3); border-radius:0 0 16px 16px; }
+    #mobile-drawer.open{ transform:translateY(0); }
+    #mobile-drawer .drawer-row{ display:flex; gap:8px; margin:10px 0; }
+    #mobile-drawer input{ flex:1; padding:10px; border-radius:10px; border:none; }
+    #mobile-drawer button{ padding:10px 16px; border-radius:10px; border:none; font-weight:bold; cursor:pointer; }
+    #drawer-close{ position:absolute; top:10px; right:12px; background:rgba(255,255,255,0.2); border:none; color:white; width:32px; height:32px; border-radius:50%; cursor:pointer; }
+
+    #chat-messages { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; -webkit-overflow-scrolling:touch; }
+    .bottom-bar { background:#f0f0f0; padding:8px 10px; display:flex; gap:6px; align-items:center; flex-shrink:0; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+    .bottom-bar button.icon-btn { width:40px; height:40px; border-radius:50%; border:none; background:transparent; font-size:20px; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
     .bottom-bar button.icon-btn:hover { background:#e0e0e0; }
-    #chat-input { flex:1; padding:10px 14px; border-radius:20px; border:1px solid #ccc; outline:none; }
-    #send-btn { background:#4a148c; color:white; border:none; padding:10px 18px; border-radius:20px; cursor:pointer; flex-shrink:0; font-weight:bold; }
-    #mic-btn.recording { background:#ff3b30; color:white; animation:pulse 1s infinite; }
-    @keyframes pulse { 0%{transform:scale(1)} 50%{transform:scale(1.1)} 100%{transform:scale(1)} }
-    audio { max-width:220px; margin-top:5px; }
+    #chat-input { flex:1; min-width:0; padding:11px 14px; border-radius:22px; border:1px solid #ccc; outline:none; font-size:16px; }
+    #send-btn { background:#4a148c; color:white; border:none; padding:10px 18px; border-radius:22px; cursor:pointer; flex-shrink:0; font-weight:bold; }
+
+    /* RESPONSIVE */
+    @media (max-width: 680px){
+      #menu-toggle{ display:flex; align-items:center; justify-content:center; }
+      #general-btn, #room-input, #join-btn{ display:none; }
+      #current-room-label{ font-size:13px; }
+      #chat-input{ font-size:16px; } /* prevents zoom on iPhone */
+      #chat-messages{ padding:10px; }
+      .bottom-bar{ gap:4px; padding:6px 8px; }
+      .bottom-bar button.icon-btn{ width:36px; height:36px; font-size:18px; }
+    }
+
     .hidden { display:none!important; }
-    #unified-picker { position:absolute; bottom:58px; left:0; right:0; background:white; border-radius:16px 16px 0 0; max-height:380px; display:flex; flex-direction:column; box-shadow:0 -4px 20px rgba(0,0,0,0.15); z-index:999; overflow:hidden; }
-    #unified-picker.hidden { display:none!important; }
-    .picker-tabs { display:flex; background:#f5f5f5; border-bottom:1px solid #ddd; }
-    .picker-tab { flex:1; padding:12px; text-align:center; cursor:pointer; font-size:14px; font-weight:600; border-bottom:3px solid transparent; }
-    .picker-tab.active { border-bottom-color:#4a148c; color:#4a148c; background:white; }
-    .picker-content { flex:1; overflow-y:auto; padding:10px; }
-    .picker-content.hidden { display:none!important; }
-    #attach-menu { position:absolute; bottom:58px; left:10px; background:white; border-radius:12px; padding:8px; box-shadow:0 4px 15px rgba(0,0,0,0.2); z-index:1000; display:flex; flex-direction:column; gap:6px; min-width:160px; }
-    #attach-menu.hidden { display:none!important; }
-    #attach-menu button { display:flex; align-items:center; gap:10px; padding:10px 12px; border:none; background:#f8f8f8; border-radius:8px; cursor:pointer; text-align:left; font-size:14px; }
-    #attach-menu button:hover { background:#eee; }
   </style>
 </head>
 <body>
 
 <div class="top-bar">
-  <button id="general-btn" type="button" style="background:#2e0a5c; color:white; border:1px solid rgba(255,255,255,0.3); padding:6px 12px; border-radius:20px; cursor:pointer; font-weight:bold; flex-shrink:0;"># General</button>
-  <input type="text" id="room-input" placeholder="Room name" style="padding:6px 10px; border-radius:6px; border:none; max-width:100px;" autocomplete="off">
-  <button id="join-btn" type="button" style="background:white; color:#4a148c; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold;">Join</button>
-  <span id="current-room-label" style="flex:1; min-width:0;">Room: general | You: Guest</span>
-  <button id="change-profile-btn" type="button" title="Profile / Communities">⚙️</button>
+  <button id="menu-toggle" type="button">☰</button>
+  <button id="general-btn" type="button"># General</button>
+  <input type="text" id="room-input" placeholder="Room name" autocomplete="off">
+  <button id="join-btn" type="button">Join</button>
+  <span id="current-room-label">Room: general | You: Guest</span>
+  <button id="change-profile-btn" type="button" title="Profile">⚙️</button>
+</div>
+
+<!-- MOBILE MENU DRAWER -->
+<div id="mobile-drawer">
+  <button id="drawer-close" type="button">✕</button>
+  <div style="font-weight:bold; font-size:18px; margin-bottom:4px;">Private Room Chat</div>
+  <div id="drawer-info" style="opacity:0.9; font-size:13px; margin-bottom:12px;">Room: general | You: Guest</div>
+  <div class="drawer-row">
+    <button id="drawer-general" type="button" style="background:#2e0a5c; color:white; flex:1;"># General</button>
+    <button id="drawer-profile" type="button" style="background:rgba(255,255,255,0.2); color:white;">⚙️ Profile</button>
+  </div>
+  <div class="drawer-row">
+    <input type="text" id="drawer-room-input" placeholder="Enter room name (e.g. 2k26)">
+    <button id="drawer-join" type="button" style="background:white; color:#4a148c;">Join</button>
+  </div>
 </div>
 
 <div id="chat-messages"></div>
-<div id="reply-preview" class="hidden" style="display:none; background:#f5f0ff; border-left:4px solid #4a148c; padding:8px 12px; align-items:center; gap:10px; border-top:1px solid #ddd;">
-  <div style="flex:1; overflow:hidden;">
-    <p id="reply-to-name" style="font-size:12px; font-weight:bold; color:#4a148c;"></p>
-    <p id="reply-to-text" style="font-size:12px; color:#555; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></p>
-  </div>
-  <button id="reply-cancel" type="button" style="background:#eee; border:none; width:28px; height:28px; border-radius:50%; cursor:pointer;">×</button>
-</div>
-<div id="recording-preview" class="hidden" style="display:none; background:white; padding:10px 15px; border-top:1px solid #ddd; align-items:center; gap:10px;">
-  <div style="width:12px; height:12px; background:red; border-radius:50%;"></div>
-  <span id="recording-time" style="font-weight:bold; color:red;">00:00</span>
-  <span style="flex:1; font-size:13px;">Recording...</span>
-  <button id="recording-cancel" type="button" style="background:#eee; border:none; padding:6px 12px; border-radius:20px; cursor:pointer;">Cancel</button>
-  <button id="recording-stop" type="button" style="background:#4a148c; color:white; border:none; padding:6px 12px; border-radius:20px; cursor:pointer;">Stop</button>
-</div>
-
-<div id="attach-menu" class="hidden">
-  <button id="attach-photo" type="button">🖼️ Photo / Video</button>
-  <button id="attach-file" type="button">📄 Document</button>
-  <button id="attach-gif" type="button">🎞️ GIF</button>
-  <button id="attach-sticker" type="button">🌟 Sticker</button>
-</div>
-
-<div id="unified-picker" class="hidden">
-  <div class="picker-tabs">
-    <div class="picker-tab active" data-tab="emoji">😊 Emoji</div>
-    <div class="picker-tab" data-tab="gif">GIF</div>
-    <div class="picker-tab" data-tab="sticker">Stickers</div>
-  </div>
-  <div id="tab-emoji" class="picker-content"></div>
-  <div id="tab-gif" class="picker-content hidden">
-    <div style="display:flex; gap:6px; margin-bottom:8px; position:sticky; top:0; background:white; padding-bottom:6px;">
-      <input id="gif-search" placeholder="Search GIFs..." style="flex:1; padding:8px 12px; border-radius:20px; border:1px solid #ddd;">
-    </div>
-    <div id="gif-results" style="display:grid; grid-template-columns:repeat(2,1fr); gap:6px;"></div>
-  </div>
-  <div id="tab-sticker" class="picker-content hidden" style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;"></div>
-</div>
 
 <div class="bottom-bar">
   <button id="attach-btn" class="icon-btn" type="button">📎</button>
@@ -95,30 +89,59 @@
   <button id="send-btn" type="button">Send</button>
 </div>
 
-<div id="username-overlay" class="password-overlay">
-  <div class="password-box">
-    <h3>Set Your Profile</h3>
+<div id="username-overlay" class="password-overlay" style="position:fixed; inset:0; background:rgba(0,0,0,0.75); display:flex; z-index:10000; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
+  <div class="password-box" style="background:white; width:92%; max-width:380px; padding:22px; border-radius:18px;">
+    <h3 id="profileTitle" style="text-align:center; margin-bottom:10px;">Set Your Profile</h3>
     <img id="avatar-preview" src="https://via.placeholder.com/100/4a148c/ffffff?text=?" style="width:80px; height:80px; border-radius:50%; object-fit:cover; margin:0 auto; display:block;">
-    <input type="file" id="avatar-input" accept="image/*" style="margin:10px 0;">
-    <input type="text" id="username-input" placeholder="Your name" autocomplete="off" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; margin-top:8px;">
-    <button id="username-btn" type="button" style="width:100%; margin-top:10px; background:#4a148c; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer;">Continue</button>
-  </div>
-</div>
-
-<div id="room-pass-overlay" class="password-overlay hidden">
-  <div class="password-box">
-    <h3 id="room-pass-title">Enter Password</h3>
-    <p id="room-pass-desc" style="font-size:13px; color:#666;"></p>
-    <div style="display:flex; gap:5px; align-items:center;">
-      <input type="password" id="room-pass-input" placeholder="Password" style="flex:1; padding:10px; border-radius:8px; border:1px solid #ddd;">
-      <span id="toggle-pass" style="cursor:pointer; font-size:20px;">👁️</span>
+    <input type="file" id="avatar-input" accept="image/*" style="margin:10px 0; width:100%;">
+    <input type="text" id="username-input" placeholder="Display name *required" autocomplete="off" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; margin:6px 0; box-sizing:border-box;">
+    <select id="p_gender" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; margin:6px 0; box-sizing:border-box;">
+      <option value="">Gender *required</option>
+      <option value="male">Male</option>
+      <option value="female">Female</option>
+      <option value="notsay">Prefer not to say</option>
+    </select>
+    <input type="email" id="p_gmail" placeholder="Gmail (optional)" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; margin:6px 0; box-sizing:border-box;">
+    <div style="margin:12px 0; border-top:1px solid #eee; padding-top:12px;">
+      <div id="g_id_onload"
+           data-client_id="995545702819-e5lulcophiasgkuche8m72ggrng23a4r.apps.googleusercontent.com"
+           data-callback="handleGoogle">
+      </div>
+      <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="outline" data-text="signin_with" data-size="large" data-width="100%"></div>
     </div>
-    <p id="room-pass-error" style="color:red; font-size:12px;"></p>
-    <button id="room-pass-btn" type="button" style="width:100%; background:#4a148c; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer;">Join Room</button>
-    <button id="room-pass-close" type="button" style="width:100%; background:#eee; border:none; padding:10px; border-radius:8px; margin-top:5px; cursor:pointer;">Cancel</button>
+    <button id="username-btn" type="button" style="width:100%; margin-top:12px; background:#4a148c; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold;">Save & Enter Chat</button>
+    <button id="closeProfileBtn" type="button" style="width:100%; margin-top:8px; background:#eee; color:#333; border:none; padding:10px; border-radius:10px; display:none;">Cancel</button>
   </div>
 </div>
 
 <script src="chat.js"></script>
+<script>
+// Mobile drawer logic - works with your chat.js
+const menuToggle = document.getElementById('menu-toggle');
+const drawer = document.getElementById('mobile-drawer');
+const drawerClose = document.getElementById('drawer-close');
+menuToggle.addEventListener('click', ()=> drawer.classList.add('open'));
+drawerClose.addEventListener('click', ()=> drawer.classList.remove('open'));
+document.getElementById('drawer-general').addEventListener('click', ()=>{
+  document.getElementById('general-btn').click();
+  drawer.classList.remove('open');
+});
+document.getElementById('drawer-join').addEventListener('click', ()=>{
+  const val = document.getElementById('drawer-room-input').value;
+  document.getElementById('room-input').value = val;
+  document.getElementById('join-btn').click();
+  drawer.classList.remove('open');
+});
+document.getElementById('drawer-profile').addEventListener('click', ()=>{
+  document.getElementById('change-profile-btn').click();
+  drawer.classList.remove('open');
+});
+// Sync label to drawer
+setInterval(()=>{
+  const label = document.getElementById('current-room-label').innerText;
+  document.getElementById('drawer-info').innerText = label;
+}, 500);
+</script>
+
 </body>
 </html>

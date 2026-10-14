@@ -31,7 +31,7 @@ if (!browserLock) {
 }
 
 let currentRoom = localStorage.getItem('last_room') || "general";
-let currentUser = localStorage.getItem('chat_username') || null;
+let currentUser = localStorage.getItem('chat_username') || localStorage.getItem('fed_name') || null;
 let currentAvatar = localStorage.getItem('chat_avatar') || null;
 let currentUserId = null;
 let pendingRoom = null, pendingMode = null, realtimeChannel = null;
@@ -52,7 +52,7 @@ async function ensureAuth() {
 }
 ensureAuth().then(() => {
   if(currentUser) {
-    if(usernameOverlay) usernameOverlay.classList.add('hidden');
+    if(usernameOverlay){ usernameOverlay.classList.add('hidden'); usernameOverlay.style.display='none'; }
     loadMessages();
     connectToRealtimeStream();
   }
@@ -67,9 +67,12 @@ function saveJoinedRoom(roomName) {
     rooms.push(roomName);
     localStorage.setItem('joined_rooms', JSON.stringify(rooms));
   }
+  localStorage.setItem('last_room', roomName);
+  localStorage.setItem('current_room', roomName);
 }
 saveJoinedRoom(currentRoom);
 
+// File preview
 function createFilePreviewBox() {
   if(document.getElementById('file-preview-box')) return;
   const bottomBar = document.querySelector('.bottom-bar');
@@ -88,7 +91,6 @@ function createFilePreviewBox() {
   if(cb) cb.onclick = clearFilePreview;
 }
 createFilePreviewBox();
-
 function showFilePreview(file) {
   pendingFile = file;
   const box = document.getElementById('file-preview-box');
@@ -112,11 +114,12 @@ function clearFilePreview() {
   if(img) img.src="";
 }
 
+// Profile overlays
 function createProfileOverlays() {
   if(document.getElementById('profile-overlay')) return;
   const html=`
-  <div id="profile-overlay" class="password-overlay hidden" style="z-index:10000;">
-    <div class="password-box" style="padding:0; overflow:hidden; max-width:340px;">
+  <div id="profile-overlay" class="password-overlay hidden" style="position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:10000;">
+    <div class="password-box" style="padding:0; overflow:hidden; max-width:340px; background:white; border-radius:16px;">
       <div style="background:#4a148c; padding:15px; color:white; display:flex; align-items:center; gap:10px;">
         <span id="profile-close" style="cursor:pointer; font-size:20px;">←</span><b>Profile</b>
       </div>
@@ -131,7 +134,7 @@ function createProfileOverlays() {
       </div>
     </div>
   </div>
-  <div id="full-pic-overlay" class="password-overlay hidden" style="z-index:10001; background:rgba(0,0,0,0.9);">
+  <div id="full-pic-overlay" class="password-overlay hidden" style="position:fixed; inset:0; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center; z-index:10001;">
     <span id="full-pic-close" style="position:absolute; top:20px; right:20px; color:white; font-size:30px; cursor:pointer;">×</span>
     <img id="full-pic-img" src="" style="max-width:90%; max-height:90%; border-radius:8px; object-fit:contain;">
   </div>`;
@@ -144,8 +147,7 @@ function createProfileOverlays() {
   const pfi=document.getElementById('profile-full-img'); if(pfi) pfi.onclick=()=>openFullImage(pfi.src);
 }
 createProfileOverlays();
-
-function openProfile(senderName, avatarUrl){
+function openProfileView(senderName, avatarUrl){
   const pn=document.getElementById('profile-name'); if(pn) pn.textContent=senderName;
   const pud=document.getElementById('profile-username-detail'); if(pud) pud.textContent=senderName;
   const pr=document.getElementById('profile-room'); if(pr) pr.textContent=currentRoom;
@@ -158,21 +160,17 @@ function openFullImage(url){
   const fo=document.getElementById('full-pic-overlay'); if(fo) fo.classList.remove('hidden');
 }
 if(currentAvatar && avatarPreview) avatarPreview.src=currentAvatar;
-
 function formatTime(d){
   const date=new Date(d);
   const diff=Math.floor((new Date()-date)/86400000);
   let dp=diff===0?"Today":diff===1?"Yesterday":date.toLocaleDateString([],{day:'2-digit',month:'short'});
   return `${dp} • ${date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
 }
-
 async function hashPass(pass){
   const enc = new TextEncoder().encode(pass);
   const buf = await crypto.subtle.digest('SHA-256', enc);
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-
-// ONLINE PRESENCE - SAFE, WON'T CRASH
 let presenceChannel;
 async function setupPresence(){
   try {
@@ -189,13 +187,9 @@ async function setupPresence(){
         await presenceChannel.track({ user_id: userId, online_at: new Date().toISOString() });
       }
     });
-  } catch(e) {
-    console.log("presence skipped, chat still works", e.message);
-  }
+  } catch(e) {}
 }
-function updateOnlineList(state){
-  console.log("Online now:", Object.keys(state).length);
-}
+function updateOnlineList(state){}
 
 if(avatarInput){
   avatarInput.addEventListener('change', ()=>{
@@ -204,9 +198,44 @@ if(avatarInput){
   });
 }
 
+// ===== GOOGLE =====
+function handleGoogle(res){
+  try{
+    const data = JSON.parse(atob(res.credential.split('.')[1]));
+    if(usernameInput) usernameInput.value = data.name;
+    const gmailInput = document.getElementById('p_gmail');
+    if(gmailInput) gmailInput.value = data.email;
+    if(avatarPreview) avatarPreview.src = data.picture;
+    localStorage.setItem('fed_pic', data.picture);
+    localStorage.setItem('fed_email', data.email);
+  }catch(e){}
+}
+function closeProfile(){
+  const has = localStorage.getItem('fed_name') || localStorage.getItem('chat_username');
+  if(!has){ alert('Please set profile first'); return; }
+  if(usernameOverlay){ usernameOverlay.classList.add('hidden'); usernameOverlay.style.display='none'; }
+  const closeBtn = document.getElementById('closeProfileBtn');
+  if(closeBtn) closeBtn.style.display='none';
+}
+function updateChatHeader(){
+  const name = localStorage.getItem('fed_name') || localStorage.getItem('chat_username') || currentUser || 'Guest';
+  const gender = localStorage.getItem('fed_gender') || '';
+  const room = localStorage.getItem('last_room') || currentRoom || 'general';
+  if(currentRoomLabel) currentRoomLabel.textContent = `Room: ${room} | You: ${name}${gender? ' • '+gender : ''}`;
+  if(chatInput){
+    chatInput.value = '';
+    chatInput.placeholder = `${name} • #${room} > Type a message...`;
+  }
+}
 if(usernameBtn){
   usernameBtn.addEventListener('click', async ()=>{
-    const name=usernameInput.value.trim(); if(!name) return alert("Enter your name");
+    const name = usernameInput.value.trim();
+    const genderEl = document.getElementById('p_gender');
+    const gmailEl = document.getElementById('p_gmail');
+    const gender = genderEl? genderEl.value : '';
+    const gmail = gmailEl? gmailEl.value.trim() : '';
+    if(!name) return alert("Enter your name");
+    if(!gender) return alert("Please select gender");
     usernameBtn.textContent="Saving..."; usernameBtn.disabled=true;
     let avatarUrl=currentAvatar;
     try{
@@ -218,29 +247,32 @@ if(usernameBtn){
         if(error) throw error;
         const { data }=supabaseClient.storage.from('avatars').getPublicUrl(fileName);
         avatarUrl=data.publicUrl;
+      } else if(localStorage.getItem('fed_pic')){
+        avatarUrl = localStorage.getItem('fed_pic');
       }
       currentUser=name; currentAvatar=avatarUrl;
       localStorage.setItem('chat_username',name);
-      localStorage.setItem('chat_has_account','true');
-      localStorage.setItem('chat_user_profile', JSON.stringify({id: currentUserId, name}));
+      localStorage.setItem('fed_name',name);
+      localStorage.setItem('fed_gender',gender);
+      if(gmail) localStorage.setItem('fed_email',gmail);
       if(avatarUrl) localStorage.setItem('chat_avatar',avatarUrl);
+      localStorage.setItem('chat_has_account','true');
       await supabaseClient.from('user_profiles').upsert([{ id:currentUserId, username:name, avatar_url:avatarUrl }],{ onConflict:'id' });
-      if(usernameOverlay) usernameOverlay.classList.add('hidden');
+      if(usernameOverlay){ usernameOverlay.classList.add('hidden'); usernameOverlay.style.display='none'; }
+      updateChatHeader();
       loadMessages(); connectToRealtimeStream();
-    }catch(err){ alert("Error: "+err.message); }finally{ usernameBtn.textContent="Continue"; usernameBtn.disabled=false; }
+    }catch(err){ alert("Error: "+err.message); }finally{ usernameBtn.textContent="Save & Enter Chat"; usernameBtn.disabled=false; }
   });
 }
-
 async function loadMessages(){
   const { data, error }=await supabaseClient.from('messages').select('*').eq('room_id',currentRoom).order('created_at',{ascending:true});
   if(error){ console.error(error); return; }
   if(chatMessages) chatMessages.innerHTML="";
   if(data && chatMessages) data.forEach(m=> appendMessageToFeed(m.text,m.file_url,m.file_type,m.sender_name,m.avatar_url,m.sender_id===currentUserId,m.created_at,m.id));
-  if(currentRoomLabel) currentRoomLabel.textContent=`Room: ${currentRoom} | You: ${currentUser||'Guest'}`;
+  updateChatHeader();
   clearBadge(); createBadgeUI();
   setupPresence();
 }
-
 function appendMessageToFeed(text,fileUrl,fileType,senderName,avatarUrl,isOwn=false,createdAt=null,messageId=null){
   if(!chatMessages) return;
   let replyData = null;
@@ -263,7 +295,7 @@ function appendMessageToFeed(text,fileUrl,fileType,senderName,avatarUrl,isOwn=fa
   let avatarEl;
   if(avatarUrl){ avatarEl=document.createElement('img'); avatarEl.src=avatarUrl; avatarEl.style.cssText='width:32px; height:32px; border-radius:50%; object-fit:cover; flex-shrink:0; cursor:pointer;'; }
   else { avatarEl=document.createElement('div'); avatarEl.textContent=(senderName||'?').charAt(0).toUpperCase(); avatarEl.style.cssText='width:32px; height:32px; border-radius:50%; background:#4a148c; color:white; display:flex; align-items:center; justify-content:center; font-weight:bold; flex-shrink:0; cursor:pointer;'; }
-  avatarEl.onclick=()=>openProfile(senderName,avatarUrl);
+  avatarEl.onclick=()=>openProfileView(senderName,avatarUrl);
   const bubble=document.createElement('div');
   bubble.classList.add('message',isOwn?'outgoing':'incoming');
   if(messageId) bubble.setAttribute('data-id',messageId);
@@ -274,7 +306,7 @@ function appendMessageToFeed(text,fileUrl,fileType,senderName,avatarUrl,isOwn=fa
     quote.innerHTML=`<b style="font-size:11px; display:block;">${replyData.sender_name}</b><span style="font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; max-width:160px;">${replyData.text || (replyData.file_url? '📷 Photo' : '')}</span>`;
     bubble.appendChild(quote);
   }
-  if(!isOwn && senderName){ const b=document.createElement('b'); b.textContent=senderName; b.style.cssText='font-size:12px; color:#075e54; display:block; margin-bottom:2px; cursor:pointer;'; b.onclick=()=>openProfile(senderName,avatarUrl); bubble.appendChild(b); }
+  if(!isOwn && senderName){ const b=document.createElement('b'); b.textContent=senderName; b.style.cssText='font-size:12px; color:#075e54; display:block; margin-bottom:2px; cursor:pointer;'; b.onclick=()=>openProfileView(senderName,avatarUrl); bubble.appendChild(b); }
   if(displayText){ const s=document.createElement('div'); s.textContent=displayText; s.style.whiteSpace='pre-wrap'; s.style.wordBreak='break-word'; bubble.appendChild(s); }
   if(fileUrl){
     if(fileType?.startsWith('image/')){
@@ -299,12 +331,11 @@ function appendMessageToFeed(text,fileUrl,fileType,senderName,avatarUrl,isOwn=fa
   if(!isOwn){ row.appendChild(avatarEl); row.appendChild(bubble); } else { row.appendChild(bubble); row.appendChild(avatarEl); }
   chatMessages.appendChild(row); chatMessages.scrollTop=chatMessages.scrollHeight;
 }
-
 let lastSend = 0;
 async function sendMessage(){
   if(Date.now() - lastSend < 800) return;
   lastSend = Date.now();
-  if(!currentUser){ if(usernameOverlay) usernameOverlay.classList.remove('hidden'); return alert("Set your name first"); }
+  if(!currentUser){ if(usernameOverlay){ usernameOverlay.classList.remove('hidden'); usernameOverlay.style.display='flex'; } return alert("Set your name first"); }
   await ensureAuth();
   let finalText = chatInput? chatInput.value.trim() : "";
   if(pendingReply){
@@ -332,17 +363,16 @@ async function sendMessage(){
   const { error }=await supabaseClient.from('messages').insert([{ text:finalText, room_id:currentRoom, sender_name:currentUser, avatar_url:currentAvatar, sender_id:currentUserId }]);
   if(error) alert(error.message);
 }
-
 async function attemptJoinRoom(){
-  if(!currentUser){ if(usernameOverlay) usernameOverlay.classList.remove('hidden'); return alert("Enter your name first"); }
-  const name=roomInput?roomInput.value.trim():""; if(!name) return alert("Enter room name");
+  if(!currentUser){ if(usernameOverlay){ usernameOverlay.classList.remove('hidden'); usernameOverlay.style.display='flex'; } return alert("Enter your name first"); }
+  const name=(roomInput?roomInput.value.trim():"") || (document.getElementById('drawer-room-input')?.value.trim()||"");
+  if(!name) return alert("Enter room name");
   pendingRoom=name;
   const { data }=await supabaseClient.from('rooms').select('*').eq('id',name).maybeSingle();
   if(!data){ pendingMode='create'; if(roomPassTitle) roomPassTitle.textContent='Create Password'; if(roomPassDesc) roomPassDesc.textContent=`"${name}" is new. Set password`; }
   else { pendingMode='join'; if(roomPassTitle) roomPassTitle.textContent='Enter Password'; if(roomPassDesc) roomPassDesc.textContent=`"${name}" is private`; }
   if(roomPassInput) roomPassInput.value=""; if(roomPassError) roomPassError.textContent=""; if(roomPassOverlay) roomPassOverlay.classList.remove('hidden');
 }
-
 async function confirmRoomPassword(){
   const pass=roomPassInput?roomPassInput.value.trim():""; if(!pass){ if(roomPassError) roomPassError.textContent="Enter password"; return; }
   if(roomPassBtn){ roomPassBtn.textContent="Checking..."; roomPassBtn.disabled=true; }
@@ -355,10 +385,12 @@ async function confirmRoomPassword(){
     const { data }=await supabaseClient.from('rooms').select('*').eq('id',pendingRoom).eq('password_hash',hashed).maybeSingle();
     if(!data){ if(roomPassError) roomPassError.textContent="Wrong password!"; if(roomPassBtn){ roomPassBtn.textContent="Join"; roomPassBtn.disabled=false; } return; }
   }
-  currentRoom=pendingRoom; localStorage.setItem('last_room',currentRoom); saveJoinedRoom(currentRoom);
-  if(roomPassOverlay) roomPassOverlay.classList.add('hidden'); if(roomPassBtn){ roomPassBtn.textContent="Join Room"; roomPassBtn.disabled=false; } loadMessages(); connectToRealtimeStream();
+  currentRoom=pendingRoom;
+  saveJoinedRoom(currentRoom);
+  if(roomPassOverlay) roomPassOverlay.classList.add('hidden');
+  if(roomPassBtn){ roomPassBtn.textContent="Join Room"; roomPassBtn.disabled=false; }
+  loadMessages(); connectToRealtimeStream();
 }
-
 function connectToRealtimeStream(){
   if(realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
   realtimeChannel=supabaseClient.channel(`chat-${currentRoom}`)
@@ -373,7 +405,6 @@ function connectToRealtimeStream(){
     })
 .subscribe();
 }
-
 if(joinBtn) joinBtn.addEventListener('click',attemptJoinRoom);
 if(roomPassBtn) roomPassBtn.addEventListener('click',confirmRoomPassword);
 if(roomPassClose) roomPassClose.addEventListener('click',()=>{ if(roomPassOverlay) roomPassOverlay.classList.add('hidden'); });
@@ -381,12 +412,9 @@ if(sendBtn) sendBtn.addEventListener('click',sendMessage);
 if(chatInput) chatInput.addEventListener('keydown', e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); if(chatInput.value.trim()!==''||pendingFile) sendMessage(); } });
 if(fileInput) fileInput.addEventListener('change', ()=>{ const f=fileInput.files[0]; if(!f) return; showFilePreview(f); });
 
+// MIC
 let mediaRecorder=null, audioChunks=[], recordingTimer=null, recordingSeconds=0, audioStream=null;
 const micBtn=document.getElementById('mic-btn');
-const recordingPreview=document.getElementById('recording-preview');
-const recordingTime=document.getElementById('recording-time');
-const recordingCancel=document.getElementById('recording-cancel');
-const recordingStop=document.getElementById('recording-stop');
 function formatRecTime(s){ const m=String(Math.floor(s/60)).padStart(2,'0'); const sec=String(s%60).padStart(2,'0'); return `${m}:${sec}`; }
 function getSupportedMime(){ if(MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) return 'audio/webm;codecs=opus'; if(MediaRecorder.isTypeSupported('audio/webm')) return 'audio/webm'; if(MediaRecorder.isTypeSupported('audio/mp4')) return 'audio/mp4'; return 'audio/webm'; }
 async function startRecording(){
@@ -396,12 +424,9 @@ async function startRecording(){
     mediaRecorder=new MediaRecorder(audioStream,{mimeType});
     audioChunks=[]; recordingSeconds=0;
     mediaRecorder.ondataavailable=e=>{ if(e.data&&e.data.size>0) audioChunks.push(e.data); };
-    mediaRecorder.onstop=()=>{ clearInterval(recordingTimer); if(audioChunks.length===0) return; const blob=new Blob(audioChunks,{type:mimeType}); if(blob.size<800){ clearFilePreview(); return; } const ext=mimeType.includes('mp4')?'m4a':'webm'; const file=new File([blob],`voicenote_${Date.now()}.${ext}`,{type:mimeType}); showFilePreview(file); };
+    mediaRecorder.onstop=()=>{ if(audioChunks.length===0) return; const blob=new Blob(audioChunks,{type:mimeType}); if(blob.size<800){ clearFilePreview(); return; } const ext=mimeType.includes('mp4')?'m4a':'webm'; const file=new File([blob],`voicenote_${Date.now()}.${ext}`,{type:mimeType}); showFilePreview(file); };
     mediaRecorder.start(100);
     if(micBtn) micBtn.classList.add('recording');
-    if(recordingPreview){ recordingPreview.classList.remove('hidden'); recordingPreview.style.display='flex'; }
-    if(recordingTime) recordingTime.textContent='00:00';
-    recordingTimer=setInterval(()=>{ recordingSeconds++; if(recordingTime) recordingTime.textContent=formatRecTime(recordingSeconds); },1000);
   }catch(err){ alert("Mic denied: "+err.message); stopRecording(true); }
 }
 function stopRecording(cancel=false){
@@ -409,14 +434,12 @@ function stopRecording(cancel=false){
   if(audioStream){ audioStream.getTracks().forEach(t=>t.stop()); audioStream=null; }
   clearInterval(recordingTimer);
   if(micBtn) micBtn.classList.remove('recording');
-  if(recordingPreview){ recordingPreview.classList.add('hidden'); recordingPreview.style.display='none'; }
   if(cancel) clearFilePreview();
 }
 if(micBtn){ micBtn.onclick=()=>{ if(micBtn.classList.contains('recording')) stopRecording(false); else startRecording(); }; }
-if(recordingStop) recordingStop.onclick=()=>stopRecording(false);
-if(recordingCancel) recordingCancel.onclick=()=>stopRecording(true);
 if(togglePass) togglePass.addEventListener('click',()=>{ if(!roomPassInput) return; roomPassInput.type=roomPassInput.type==='password'?'text':'password'; togglePass.textContent=roomPassInput.type==='password'?'👁️':'🙈'; });
 
+// COMMUNITIES LIST
 function renderCommunitiesList(){
   let container=document.getElementById('communities-list');
   if(!container){
@@ -431,22 +454,41 @@ function renderCommunitiesList(){
   rooms.forEach(r=>{
     const item=document.createElement('div'); item.style.cssText="display:flex; justify-content:space-between; align-items:center; background:#f5f0ff; padding:8px 10px; border-radius:8px; cursor:pointer;";
     item.innerHTML=`<span style="font-size:13px; font-weight:600;"># ${r}</span><span style="font-size:11px; color:#4a148c;">Tap to join</span>`;
-    item.onclick=async()=>{ currentRoom=r; localStorage.setItem('last_room',r); if(usernameOverlay) usernameOverlay.classList.add('hidden'); pendingRoom=r; const { data }=await supabaseClient.from('rooms').select('*').eq('id',r).maybeSingle(); if(!data){ alert("Room no longer exists"); return; } pendingMode='join'; if(roomPassTitle) roomPassTitle.textContent='Enter Password'; if(roomPassDesc) roomPassDesc.textContent=`"${r}" is private`; if(roomPassInput) roomPassInput.value=""; if(roomPassError) roomPassError.textContent=""; if(roomPassOverlay) roomPassOverlay.classList.remove('hidden'); };
+    item.onclick=async()=>{ currentRoom=r; localStorage.setItem('last_room',r); if(usernameOverlay){ usernameOverlay.classList.add('hidden'); usernameOverlay.style.display='none'; } pendingRoom=r; const { data }=await supabaseClient.from('rooms').select('*').eq('id',r).maybeSingle(); if(!data){ alert("Room no longer exists"); return; } pendingMode='join'; if(roomPassTitle) roomPassTitle.textContent='Enter Password'; if(roomPassDesc) roomPassDesc.textContent=`"${r}" is private`; if(roomPassInput) roomPassInput.value=""; if(roomPassError) roomPassError.textContent=""; if(roomPassOverlay) roomPassOverlay.classList.remove('hidden'); };
     container.appendChild(item);
   });
 }
 const changeProfileBtn=document.getElementById('change-profile-btn');
 if(changeProfileBtn){
   changeProfileBtn.addEventListener('click', ()=>{
-    if(usernameOverlay) usernameOverlay.classList.remove('hidden');
-    if(usernameInput) usernameInput.value=currentUser||"";
+    const name = localStorage.getItem('fed_name') || localStorage.getItem('chat_username') || '';
+    const gender = localStorage.getItem('fed_gender') || '';
+    const gmail = localStorage.getItem('fed_email') || '';
+    if(usernameOverlay){ usernameOverlay.classList.remove('hidden'); usernameOverlay.style.display='flex'; }
+    if(usernameInput) usernameInput.value=name;
+    const gSel = document.getElementById('p_gender');
+    if(gSel) gSel.value=gender;
+    const gMail = document.getElementById('p_gmail');
+    if(gMail) gMail.value=gmail;
+    if(name){
+      const title = document.getElementById('profileTitle');
+      if(title) title.innerText='Edit Profile';
+      const closeBtn = document.getElementById('closeProfileBtn');
+      if(closeBtn) closeBtn.style.display='block';
+    }
     if(currentAvatar&&avatarPreview) avatarPreview.src=currentAvatar;
     setTimeout(renderCommunitiesList,80);
   });
 }
-window.addEventListener('DOMContentLoaded',()=>{ if(chatInput) chatInput.value=""; if(roomInput) roomInput.value=""; });
-if(chatInput) chatInput.value=""; if(roomInput) roomInput.value="";
+window.addEventListener('DOMContentLoaded',()=>{
+  if(chatInput){ chatInput.value=""; }
+  if(roomInput){ roomInput.value=""; }
+  updateChatHeader();
+});
+if(chatInput) chatInput.value="";
+if(roomInput) roomInput.value="";
 
+// SOUND + BADGE
 function initChime(){ try{ notifAudioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
 function playNativeChime(){
   try{
@@ -477,64 +519,130 @@ document.addEventListener('click',()=>{ if(notifAudioCtx&&notifAudioCtx.state===
 if(chatMessages) chatMessages.addEventListener('scroll',()=>{ const atBottom=chatMessages.scrollTop+chatMessages.clientHeight>=chatMessages.scrollHeight-50; if(atBottom) clearBadge(); });
 if(chatInput) chatInput.addEventListener('focus', clearBadge);
 
-const attachBtn=document.getElementById('attach-btn');
-const attachMenu=document.getElementById('attach-menu');
-const unifiedPicker=document.getElementById('unified-picker');
-const attachPhoto=document.getElementById('attach-photo');
-const attachFile=document.getElementById('attach-file');
-const attachGifBtn=document.getElementById('attach-gif');
-const attachStickerBtn=document.getElementById('attach-sticker');
-const emojiBtn=document.getElementById('emoji-btn');
-
-if(attachBtn){
-  attachBtn.onclick=(e)=>{ e.stopPropagation(); if(attachMenu) attachMenu.classList.toggle('hidden'); if(unifiedPicker) unifiedPicker.classList.add('hidden'); };
+// ================= FIXED: UNIFIED PICKER + EMOJI/STICKER/GIF =================
+// Create unified picker UI if not exists
+function ensurePickerUI(){
+  if(document.getElementById('unified-picker')) return document.getElementById('unified-picker');
+  const bottomBar = document.querySelector('.bottom-bar');
+  if(!bottomBar) return null;
+  const html = `
+  <div id="unified-picker" class="hidden" style="position:fixed; bottom:70px; left:10px; right:10px; max-width:360px; background:white; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.2); z-index:9998; overflow:hidden; display:none; flex-direction:column;">
+    <div style="display:flex; background:#f5f5f5; padding:6px; gap:6px;">
+      <button class="picker-tab active" data-tab="emoji" style="flex:1; padding:8px; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">😊 Emoji</button>
+      <button class="picker-tab" data-tab="sticker" style="flex:1; padding:8px; border:none; border-radius:8px; cursor:pointer;">⭐ Sticker</button>
+      <button class="picker-tab" data-tab="gif" style="flex:1; padding:8px; border:none; border-radius:8px; cursor:pointer;">🎞️ GIF</button>
+    </div>
+    <div id="tab-emoji" class="picker-content" style="max-height:320px; overflow:auto;"></div>
+    <div id="tab-sticker" class="picker-content hidden" style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:10px; max-height:320px; overflow:auto;"></div>
+    <div id="tab-gif" class="picker-content hidden" style="padding:10px; max-height:320px; overflow:auto;">
+      <input id="gif-search" placeholder="Search GIFs..." style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid #ddd; margin-bottom:8px;">
+      <div id="gif-results" style="display:grid; grid-template-columns:repeat(2,1fr); gap:8px;"></div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  return document.getElementById('unified-picker');
 }
-if(attachPhoto) attachPhoto.onclick=()=>{ if(attachMenu) attachMenu.classList.add('hidden'); if(fileInput){ fileInput.accept="image/*,video/*"; fileInput.click(); } };
-if(attachFile) attachFile.onclick=()=>{ if(attachMenu) attachMenu.classList.add('hidden'); if(fileInput){ fileInput.accept=".pdf,.doc,.docx,.zip,.txt,image/*"; fileInput.click(); } };
-if(attachGifBtn) attachGifBtn.onclick=()=>{ if(attachMenu) attachMenu.classList.add('hidden'); openPicker('gif'); };
-if(attachStickerBtn) attachStickerBtn.onclick=()=>{ if(attachMenu) attachMenu.classList.add('hidden'); openPicker('sticker'); };
+
+const unifiedPicker = ensurePickerUI();
+const attachMenu = document.getElementById('attach-menu');
+const attachBtn = document.getElementById('attach-btn');
+const emojiBtn = document.getElementById('emoji-btn');
+const attachPhoto = document.getElementById('attach-photo');
+const attachFile = document.getElementById('attach-file');
+const attachGifBtn = document.getElementById('attach-gif');
+const attachStickerBtn = document.getElementById('attach-sticker');
+
+// Single picker instance guard
+let emojiPickerInstance = null;
+let pickerOpenTab = null;
 
 function openPicker(tab){
-  if(!unifiedPicker) return;
-  unifiedPicker.classList.remove('hidden');
-  document.querySelectorAll('.picker-tab').forEach(t=> t.classList.toggle('active', t.dataset.tab===tab));
-  document.querySelectorAll('.picker-content').forEach(c=> c.classList.add('hidden'));
-  const el=document.getElementById(`tab-${tab}`); if(el){ el.classList.remove('hidden'); el.style.display=tab==='gif'?'block':'grid'; if(tab==='emoji') el.style.display='block'; }
+  const picker = ensurePickerUI();
+  if(!picker) return;
+  // Toggle if same tab clicked
+  if(picker.style.display!== 'none' && pickerOpenTab === tab){
+    picker.classList.add('hidden'); picker.style.display='none'; pickerOpenTab=null; return;
+  }
+  picker.classList.remove('hidden'); picker.style.display='flex'; pickerOpenTab=tab;
+
+  picker.querySelectorAll('.picker-tab').forEach(t=>{
+    const isActive = t.dataset.tab===tab;
+    t.classList.toggle('active', isActive);
+    t.style.background = isActive? '#4a148c' : 'transparent';
+    t.style.color = isActive? 'white' : '#333';
+  });
+  picker.querySelectorAll('.picker-content').forEach(c=> { c.classList.add('hidden'); c.style.display='none'; });
+  const el=document.getElementById(`tab-${tab}`);
+  if(el){
+    el.classList.remove('hidden');
+    el.style.display = tab==='gif'?'block':'grid';
+    if(tab==='emoji') el.style.display='block';
+  }
   if(tab==='gif') searchGifs("trending");
+  if(tab==='emoji') ensureEmojiPicker();
 }
-if(emojiBtn){
-  emojiBtn.onclick=()=>{
-    if(unifiedPicker &&!unifiedPicker.classList.contains('hidden') &&!document.getElementById('tab-emoji').classList.contains('hidden')){
-      unifiedPicker.classList.add('hidden');
-    } else {
-      openPicker('emoji');
+
+function ensureEmojiPicker(){
+  const tabEmoji=document.getElementById('tab-emoji');
+  if(!tabEmoji) return;
+  if(emojiPickerInstance) return; // already created - FIX for spam click bug
+  if(!window.EmojiMart) return;
+  try{
+    emojiPickerInstance = new EmojiMart.Picker({
+      onEmojiSelect:(emoji)=>{ if(chatInput){ chatInput.value+=emoji.native; chatInput.focus(); } },
+      theme:'light', previewPosition:'none', perLine:8, emojiSize:22, parent: tabEmoji
+    });
+    // Picker appends itself to parent, no need to append
+  }catch(e){ console.log("emoji init", e); }
+}
+
+if(attachBtn){
+  attachBtn.onclick=(e)=>{
+    e.stopPropagation();
+    // create simple attach menu if not exists
+    let menu = document.getElementById('attach-menu');
+    if(!menu){
+      const m = document.createElement('div');
+      m.id='attach-menu';
+      m.className='hidden';
+      m.style.cssText='position:fixed; bottom:70px; left:10px; background:white; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.2); padding:8px; z-index:9997; display:none; flex-direction:column; gap:4px;';
+      m.innerHTML=`<button id="attach-photo" style="padding:10px 14px; border:none; background:transparent; text-align:left; cursor:pointer;">📷 Photo/Video</button><button id="attach-file" style="padding:10px 14px; border:none; background:transparent; text-align:left; cursor:pointer;">📄 File</button><button id="attach-gif" style="padding:10px 14px; border:none; background:transparent; text-align:left; cursor:pointer;">🎞️ GIF</button><button id="attach-sticker" style="padding:10px 14px; border:none; background:transparent; text-align:left; cursor:pointer;">⭐ Sticker</button>`;
+      document.body.appendChild(m);
+      menu=m;
+      m.querySelector('#attach-photo').onclick=()=>{ menu.classList.add('hidden'); menu.style.display='none'; if(fileInput){ fileInput.accept="image/*,video/*"; fileInput.click(); } };
+      m.querySelector('#attach-file').onclick=()=>{ menu.classList.add('hidden'); menu.style.display='none'; if(fileInput){ fileInput.accept=".pdf,.doc,.docx,.zip,.txt,image/*"; fileInput.click(); } };
+      m.querySelector('#attach-gif').onclick=()=>{ menu.classList.add('hidden'); menu.style.display='none'; openPicker('gif'); };
+      m.querySelector('#attach-sticker').onclick=()=>{ menu.classList.add('hidden'); menu.style.display='none'; openPicker('sticker'); };
     }
+    if(menu.classList.contains('hidden') || menu.style.display==='none'){ menu.classList.remove('hidden'); menu.style.display='flex'; }
+    else { menu.classList.add('hidden'); menu.style.display='none'; }
+    const picker = document.getElementById('unified-picker'); if(picker){ picker.classList.add('hidden'); picker.style.display='none'; pickerOpenTab=null; }
   };
 }
-document.querySelectorAll('.picker-tab').forEach(tab=>{
-  tab.onclick=()=> openPicker(tab.dataset.tab);
-});
 
-const tabEmoji=document.getElementById('tab-emoji');
-if(tabEmoji && window.EmojiMart){
-  const picker=new EmojiMart.Picker({
-    onEmojiSelect:(emoji)=>{ if(chatInput){ chatInput.value+=emoji.native; chatInput.focus(); } },
-    theme:'light', previewPosition:'none', perLine:8, emojiSize:22
-  });
-  tabEmoji.appendChild(picker);
+if(emojiBtn){
+  emojiBtn.onclick=(e)=>{
+    e.stopPropagation();
+    const menu=document.getElementById('attach-menu'); if(menu){ menu.classList.add('hidden'); menu.style.display='none'; }
+    openPicker('emoji');
+  };
 }
 
-const gifSearch=document.getElementById('gif-search');
-const gifResults=document.getElementById('gif-results');
+// Tabs switching - single listener
+document.addEventListener('click', (e)=>{
+  if(e.target.classList.contains('picker-tab')){
+    openPicker(e.target.dataset.tab);
+  }
+});
+
+// GIFs
 const LOCAL_GIFS = [
   "https://media1.tenor.com/m/2uyENRuvV-0AAAAC/coding.gif",
-  "https://media1.tenor.com/m/3o6ZsVGl3uV0p6V6kM/aaaac/happy.gif",
   "https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif",
-  "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif",
-  "https://media.giphy.com/media/26BRv0ThflsHCqDrG/giphy.gif"
+  "https://media.giphy.com/media/l0HlHJGHehK6fGzDO/giphy.gif"
 ];
-
 function searchGifs(q){
+  const gifResults=document.getElementById('gif-results');
   if(!gifResults) return;
   gifResults.innerHTML="";
   LOCAL_GIFS.forEach(full=>{
@@ -543,63 +651,71 @@ function searchGifs(q){
     img.loading="lazy";
     img.style.cssText="width:100%; height:110px; object-fit:cover; border-radius:8px; cursor:pointer; background:#f0f0f0;";
     img.onerror=()=>{ img.style.display='none'; };
-    img.onclick=async()=>{ await ensureAuth(); await supabaseClient.from('messages').insert([{ text:"", room_id:currentRoom, file_url:full, file_type:"image/gif", sender_name:currentUser, avatar_url:currentAvatar, sender_id:currentUserId }]); if(unifiedPicker) unifiedPicker.classList.add('hidden'); };
+    img.onclick=async()=>{ await ensureAuth(); await supabaseClient.from('messages').insert([{ text:"", room_id:currentRoom, file_url:full, file_type:"image/gif", sender_name:currentUser, avatar_url:currentAvatar, sender_id:currentUserId }]); const picker=document.getElementById('unified-picker'); if(picker){ picker.classList.add('hidden'); picker.style.display='none'; pickerOpenTab=null; } };
     gifResults.appendChild(img);
   });
 }
+const gifSearch=document.getElementById('gif-search');
 if(gifSearch){ gifSearch.oninput=()=>searchGifs(gifSearch.value); }
 
-const tabSticker=document.getElementById('tab-sticker');
+// Stickers
 const stickerPack=[
   "https://cdn-icons-png.flaticon.com/512/742/742751.png",
   "https://cdn-icons-png.flaticon.com/512/2584/2584606.png",
   "https://cdn-icons-png.flaticon.com/512/826/826963.png",
-  "https://cdn-icons-png.flaticon.com/512/4712/4712109.png"
+  "https://cdn-icons-png.flaticon.com/512/616/616490.png",
+  "https://cdn-icons-png.flaticon.com/512/742/742752.png",
+  "https://cdn-icons-png.flaticon.com/512/833/833472.png"
 ];
-if(tabSticker){
+function renderStickers(){
+  const tabSticker=document.getElementById('tab-sticker');
+  if(!tabSticker) return;
+  if(tabSticker.dataset.rendered==="1") return; // render once - fixes spam bug
   tabSticker.innerHTML="";
   stickerPack.forEach(url=>{
     const im=document.createElement('img');
-    im.src=url; im.style.cssText="width:70px; height:70px; object-fit:contain; cursor:pointer; background:#f9f9f9; border-radius:12px; padding:6px;";
-    im.onclick=async()=>{ await ensureAuth(); await supabaseClient.from('messages').insert([{ text:"", room_id:currentRoom, file_url:url, file_type:"image/webp", sender_name:currentUser, avatar_url:currentAvatar, sender_id:currentUserId }]); if(unifiedPicker) unifiedPicker.classList.add('hidden'); };
+    im.src=url; im.loading="lazy"; im.style.cssText="width:70px; height:70px; object-fit:contain; cursor:pointer; background:#f9f9f9; border-radius:12px; padding:6px;";
+    im.onclick=async()=>{ await ensureAuth(); await supabaseClient.from('messages').insert([{ text:"", room_id:currentRoom, file_url:url, file_type:"image/webp", sender_name:currentUser, avatar_url:currentAvatar, sender_id:currentUserId }]); const picker=document.getElementById('unified-picker'); if(picker){ picker.classList.add('hidden'); picker.style.display='none'; pickerOpenTab=null; } };
     tabSticker.appendChild(im);
   });
+  tabSticker.dataset.rendered="1";
 }
+renderStickers();
 
 const generalBtn = document.getElementById('general-btn');
 if(generalBtn){
   generalBtn.onclick = async () => {
     currentRoom = "general";
-    localStorage.setItem('last_room', "general");
     saveJoinedRoom("general");
     loadMessages();
     connectToRealtimeStream();
-    if(unifiedPicker) unifiedPicker.classList.add('hidden');
-    if(attachMenu) attachMenu.classList.add('hidden');
+    const picker=document.getElementById('unified-picker'); if(picker){ picker.classList.add('hidden'); picker.style.display='none'; }
   };
 }
 
+// Close pickers on outside click / Escape / chat click
 document.addEventListener('click', (e) => {
-  if(unifiedPicker &&!unifiedPicker.classList.contains('hidden')){
-    const isPicker = unifiedPicker.contains(e.target);
+  const picker=document.getElementById('unified-picker');
+  const menu=document.getElementById('attach-menu');
+  if(picker && picker.style.display!=='none'){
+    const isPicker = picker.contains(e.target);
     const isEmojiBtn = e.target.closest('#emoji-btn');
     const isAttachBtn = e.target.closest('#attach-btn');
-    const isAttachMenu = e.target.closest('#attach-menu');
-    if(!isPicker &&!isEmojiBtn &&!isAttachBtn &&!isAttachMenu){
-      unifiedPicker.classList.add('hidden');
+    const isTab = e.target.classList.contains('picker-tab');
+    if(!isPicker &&!isEmojiBtn &&!isAttachBtn &&!isTab){
+      picker.classList.add('hidden'); picker.style.display='none'; pickerOpenTab=null;
     }
   }
-  if(attachMenu &&!attachMenu.classList.contains('hidden')){
-    if(!attachMenu.contains(e.target) &&!e.target.closest('#attach-btn')){
-      attachMenu.classList.add('hidden');
+  if(menu && menu.style.display!=='none'){
+    if(!menu.contains(e.target) &&!e.target.closest('#attach-btn')){
+      menu.classList.add('hidden'); menu.style.display='none';
     }
   }
 });
-
 document.addEventListener('keydown', (e) => {
   if(e.key === 'Escape'){
-    if(unifiedPicker) unifiedPicker.classList.add('hidden');
-    if(attachMenu) attachMenu.classList.add('hidden');
+    const picker=document.getElementById('unified-picker'); if(picker){ picker.classList.add('hidden'); picker.style.display='none'; pickerOpenTab=null; }
+    const menu=document.getElementById('attach-menu'); if(menu){ menu.classList.add('hidden'); menu.style.display='none'; }
     const po = document.getElementById('profile-overlay');
     if(po) po.classList.add('hidden');
     const fp = document.getElementById('full-pic-overlay');
@@ -607,19 +723,18 @@ document.addEventListener('keydown', (e) => {
     if(roomPassOverlay) roomPassOverlay.classList.add('hidden');
   }
 });
-
 if(chatMessages){
   chatMessages.addEventListener('click', () => {
-    if(unifiedPicker) unifiedPicker.classList.add('hidden');
-    if(attachMenu) attachMenu.classList.add('hidden');
+    const picker=document.getElementById('unified-picker'); if(picker){ picker.classList.add('hidden'); picker.style.display='none'; pickerOpenTab=null; }
+    const menu=document.getElementById('attach-menu'); if(menu){ menu.classList.add('hidden'); menu.style.display='none'; }
   });
 }
 
+// Reply
 const replyPreview = document.getElementById('reply-preview');
 const replyToName = document.getElementById('reply-to-name');
 const replyToText = document.getElementById('reply-to-text');
 const replyCancelBtn = document.getElementById('reply-cancel');
-
 function setReply(id, senderName, text, fileUrl){
   pendingReply = { id, sender_name: senderName, text: text||"", file_url: fileUrl||"" };
   if(replyToName) replyToName.textContent = "Replying to " + senderName;
@@ -638,19 +753,8 @@ if(usernameOverlay){
     if(e.target.id === 'username-overlay'){
       if(currentUser){
         usernameOverlay.classList.add('hidden');
-      } else {
-        const box = usernameOverlay.querySelector('.password-box');
-        if(box){
-          box.style.animation = 'shake 0.3s';
-          setTimeout(()=> box.style.animation = '', 300);
-        }
+        usernameOverlay.style.display='none';
       }
     }
   });
-}
-if(!document.getElementById('shake-style')){
-  const style = document.createElement('style');
-  style.id = 'shake-style';
-  style.textContent = `@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}`;
-  document.head.appendChild(style);
 }
