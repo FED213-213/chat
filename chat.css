@@ -1,4 +1,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+body, html { width:100% !important; max-width:100% !important; margin:0 !important; }
+#chat-messages { width:100% !important; max-width:100% !important; flex:1 !important; }
+.top-bar, .bottom-bar { width:100% !important; max-width:100% !important; left:0 !important; }
 
 body {
   background: #d1b3ff;
@@ -28,7 +31,7 @@ body {
   background: #6a1b9a;
 }
 
-/* MESSAGE BUBBLES - FIXED */
+/* MESSAGE BUBBLES */
 .message {
   padding: 8px 12px;
   border-radius: 14px;
@@ -49,7 +52,7 @@ body {
 }
 
 .outgoing {
-  background: #7c4dff; /* NEW COLOR - purple, not WhatsApp green */
+  background: #7c4dff;
   color: white;
   border-top-right-radius: 2px;
 }
@@ -64,19 +67,13 @@ body {
   flex: 1;
 }
 
-/* TIMESTAMP - FIXED FOR VISIBILITY */
+/* TIMESTAMP */
 .chat-timestamp {
   font-size: 10px;
   white-space: nowrap;
 }
-
-.incoming .chat-timestamp {
-  color: #666;
-}
-
-.outgoing .chat-timestamp {
-  color: rgba(255,255,255,0.8); /* light white, visible on purple */
-}
+.incoming .chat-timestamp { color: #666; }
+.outgoing .chat-timestamp { color: rgba(255,255,255,0.8); }
 
 .delete-btn {
   font-size: 11px;
@@ -85,20 +82,11 @@ body {
   opacity: 0;
   transition: 0.2s;
 }
+.incoming .delete-btn { color: #ff4d4d; }
+.outgoing .delete-btn { color: rgba(255,255,255,0.9); }
+.message:hover .delete-btn { opacity: 1; }
 
-.incoming .delete-btn {
-  color: #ff4d4d;
-}
-
-.outgoing .delete-btn {
-  color: rgba(255,255,255,0.9);
-}
-
-.message:hover .delete-btn {
-  opacity: 1;
-}
-
-/* OVERLAY BOXES - Username & Password */
+/* OVERLAYS */
 .password-overlay {
   position: fixed;
   top: 0; left: 0;
@@ -109,10 +97,7 @@ body {
   align-items: center;
   z-index: 9999;
 }
-
-.password-overlay.hidden {
-  display: none;
-}
+.password-overlay.hidden { display: none; }
 
 .password-box {
   background: white;
@@ -126,16 +111,57 @@ body {
   box-shadow: 0 10px 25px rgba(0,0,0,0.3);
   text-align: center;
 }
+.password-box input { width: 100%; }
+.password-box button { width: 100%; }
 
-.password-box input {
-  width: 100%;
-}
-
-.password-box button {
-  width: 100%;
-}
 #profile-overlay .password-box img:hover {
   opacity: 0.85;
   transform: scale(1.02);
   transition: 0.2s;
+}
+
+/* EMOJI */
+#emoji-picker{
+  position:absolute; bottom:65px; left:10px;
+  background:white; border-radius:12px; padding:10px;
+  display:grid; grid-template-columns:repeat(5,1fr); gap:8px;
+  box-shadow:0 4px 15px rgba(0,0,0,0.2); z-index:100;
+}
+#emoji-picker.hidden{ display:none; }
+#emoji-picker span{ font-size:22px; cursor:pointer; }
+#emoji-btn{ background:transparent; border:none; font-size:22px; cursor:pointer; }
+
+/* FIXED: ONLINE DOT - CORRECTED */
+.user-list-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  cursor: pointer;
+}
+.user-list-item .avatar-wrap {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+.user-list-item .avatar-wrap img {
+  width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
+}
+.user-list-item.online .avatar-wrap::after {
+  content: '';
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 12px; height: 12px;
+  background: #25D366;
+  border: 2px solid white;
+  border-radius: 50%;
+}
+
+/* Top label online */
+#current-room-label.online-dot::after {
+  content: ' • Online';
+  color: #25D366;
+  font-size: 11px;
+  font-weight: bold;
 }
