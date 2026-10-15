@@ -85,7 +85,8 @@
     <span class="dot"></span>
     <span id="online-number">0 online</span>
   </div>
-  <button id="change-profile-btn" type="button" title="Profile">⚙️</button>
+  <button id="communities-btn" type="button" title="My Communities" style="background:rgba(255,255,255,0.2); border:none; color:white; width:36px; height:36px; border-radius:50%; cursor:pointer; font-size:18px; flex-shrink:0;">👥</button>
+<button id="change-profile-btn" type="button" title="Profile">⚙️</button>
 </div>
 
 <div id="online-popup">
@@ -94,6 +95,14 @@
     <button id="online-popup-close" style="background:rgba(255,255,255,0.2); border:none; color:white; width:28px; height:28px; border-radius:50%; cursor:pointer;">✕</button>
   </div>
   <div id="online-users-container" style="padding:10px; max-height:280px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>
+</div>
+
+<div id="communities-popup" style="position:fixed; top:60px; right:50px; width:320px; background:white; border-radius:16px; box-shadow:0 12px 30px rgba(0,0,0,0.25); z-index:9998; display:none; overflow:hidden;">
+  <div style="background:#4a148c; color:white; padding:12px 14px; font-weight:bold; display:flex; justify-content:space-between; align-items:center;">
+    <span>🏘️ My Communities</span>
+    <button id="communities-popup-close" style="background:rgba(255,255,255,0.2); border:none; color:white; width:28px; height:28px; border-radius:50%; cursor:pointer;">✕</button>
+  </div>
+  <div id="communities-list-popup" style="padding:10px; max-height:320px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>
 </div>
 
 <div id="mobile-drawer">
@@ -309,6 +318,84 @@ gifSearch.oninput=()=>{
   clearTimeout(t);
   t=setTimeout(()=> renderTab(currentTab, gifSearch.value), 500);
 };
+
+// --- MY COMMUNITIES BUTTON ---
+const communitiesBtn = document.getElementById('communities-btn');
+const communitiesPopup = document.getElementById('communities-popup');
+const communitiesListPopup = document.getElementById('communities-list-popup');
+const communitiesPopupClose = document.getElementById('communities-popup-close');
+
+function getJoinedRooms(){ try{ return JSON.parse(localStorage.getItem('joined_rooms')||'[]'); }catch{ return []; } }
+
+function renderCommunitiesPopup(){
+  const rooms = getJoinedRooms();
+  if(!communitiesListPopup) return;
+  communitiesListPopup.innerHTML = "";
+  if(rooms.length === 0){
+    communitiesListPopup.innerHTML = `<div style="text-align:center; padding:20px; color:#888; font-size:13px;">No communities yet.<br>Join a room to see it here.</div>`;
+    return;
+  }
+  rooms.forEach(r=>{
+    const isCurrent = r === currentRoom;
+    const div = document.createElement('div');
+    div.style.cssText = `display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-radius:12px; cursor:pointer; background:${isCurrent? '#f5f0ff' : 'white'}; border:1px solid ${isCurrent? '#d1c4e9' : '#eee'};`;
+    div.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="background:${isCurrent? '#4a148c':'#eee'}; color:${isCurrent? 'white':'#666'}; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:bold;">#</span>
+        <div>
+          <div style="font-weight:600; font-size:13px;">${r}</div>
+          <div style="font-size:11px; color:#888;">${isCurrent? 'Current' : 'Tap to switch'}</div>
+        </div>
+      </div>
+      <span style="font-size:12px; color:#4a148c; font-weight:bold;">${isCurrent? '✓' : '→'}</span>
+    `;
+    div.onclick = async ()=>{
+      if(r === "general"){
+        currentRoom = "general";
+        localStorage.setItem('last_room','general');
+      } else {
+        pendingRoom = r;
+        const hashed = getStoredRoomHash(r);
+        if(!hashed){
+          // ask for password
+          pendingMode = 'join';
+          if(roomPassTitle) roomPassTitle.textContent = 'Enter Password';
+          if(roomPassDesc) roomPassDesc.textContent = `"${r}" is private`;
+          if(roomPassInput) roomPassInput.value="";
+          if(roomPassError) roomPassError.textContent="";
+          if(roomPassOverlay) roomPassOverlay.classList.remove('hidden');
+          communitiesPopup.style.display='none';
+          return;
+        }
+        currentRoom = r;
+        localStorage.setItem('last_room', r);
+      }
+      saveJoinedRoom(currentRoom);
+      communitiesPopup.style.display='none';
+      loadMessages();
+      connectToRealtimeStream();
+    };
+    communitiesListPopup.appendChild(div);
+  });
+}
+
+if(communitiesBtn){
+  communitiesBtn.onclick = ()=>{
+    renderCommunitiesPopup();
+    communitiesPopup.style.display = communitiesPopup.style.display === 'block' ? 'none' : 'block';
+    if(onlinePopup) onlinePopup.classList.remove('open');
+  };
+}
+if(communitiesPopupClose){
+  communitiesPopupClose.onclick = ()=> communitiesPopup.style.display='none';
+}
+
+// Close when clicking outside
+document.addEventListener('click', (e)=>{
+  if(communitiesPopup && !communitiesPopup.contains(e.target) && e.target !== communitiesBtn){
+    communitiesPopup.style.display='none';
+  }
+});
 </script>
 </body>
 </html>
