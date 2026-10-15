@@ -58,15 +58,41 @@ function createFilePreviewBox() {
   const cb = document.getElementById('file-preview-cancel'); if(cb) cb.onclick = clearFilePreview;
 }
 createFilePreviewBox();
+
+// ===== CORRECTED: 100MB LIMIT, ALLOW ALL FILES =====
 function showFilePreview(file) {
-  pendingFile = file; const box = document.getElementById('file-preview-box'); const img = document.getElementById('file-preview-img'); const name = document.getElementById('file-preview-name'); const size = document.getElementById('file-preview-size'); if(!box ||!name ||!size) return;
-  name.textContent = file.name; size.textContent = (file.size/1024/1024).toFixed(2) + " MB • " + file.type;
-  if(file.type.startsWith('image/') && img){ img.style.display='block'; img.src=URL.createObjectURL(file); } else if(img) img.style.display='none';
-  box.classList.remove('hidden'); box.style.display='flex'; if(chatInput) chatInput.focus();
+  const MAX_SIZE = 100 * 1024 * 1024; // 100MB
+  if(file.size > MAX_SIZE){
+    alert(`File too large: ${(file.size/1024/1024).toFixed(1)}MB. Max is 100MB.`);
+    if(fileInput) fileInput.value="";
+    return;
+  }
+
+  // Allow ALL files, just flag risky for uploader
+  const riskyExt = ['.exe','.bat','.sh','.cmd','.apk','.app','.msi','.dll','.js','.vbs'];
+  const isRisky = riskyExt.some(ext => file.name.toLowerCase().endsWith(ext));
+
+  pendingFile = file;
+  const box = document.getElementById('file-preview-box');
+  const img = document.getElementById('file-preview-img');
+  const name = document.getElementById('file-preview-name');
+  const size = document.getElementById('file-preview-size');
+  if(!box ||!name ||!size) return;
+
+  name.textContent = file.name;
+  size.textContent = (file.size/1024/1024).toFixed(2) + " MB • " + (file.type || 'file') + (isRisky? " • ⚠️ Executable" : "");
+  if(isRisky) size.style.color = "#d32f2f";
+  else size.style.color = "#888";
+
+  if(file.type.startsWith('image/') && img){ img.style.display='block'; img.src=URL.createObjectURL(file); }
+  else if(img) img.style.display='none';
+
+  box.classList.remove('hidden'); box.style.display='flex';
+  if(chatInput) chatInput.focus();
 }
 function clearFilePreview() { pendingFile = null; if(fileInput) fileInput.value=""; const box=document.getElementById('file-preview-box'); if(box){ box.classList.add('hidden'); box.style.display='none'; } const img=document.getElementById('file-preview-img'); if(img) img.src=""; }
 
-// ===== NEW PROFILE OVERLAY - SHOWS PUBLIC INFO, HIDES GMAIL =====
+// ===== NEW PROFILE OVERLAY =====
 function createProfileOverlays() {
   if(document.getElementById('profile-overlay')) return;
   const html=`
@@ -115,7 +141,6 @@ async function openProfileView(senderName, avatarUrl, senderId=null){
   const pot=document.getElementById('profile-online-text'); const pod=document.getElementById('profile-online-dot');
   if(pot) pot.textContent='Checking...'; if(pod) pod.style.background='#888';
   const po=document.getElementById('profile-overlay'); if(po) po.classList.remove('hidden');
-
   try{
     let profileData = null;
     if(senderId){
@@ -135,7 +160,6 @@ async function openProfileView(senderName, avatarUrl, senderId=null){
       if(pj) pj.textContent = profileData.created_at? new Date(profileData.created_at).toLocaleDateString() : 'Recently';
       const bioRow=document.getElementById('profile-bio-row'); const bio=document.getElementById('profile-bio');
       if(profileData.bio && bio){ bio.textContent=profileData.bio; bioRow.style.display='flex'; } else if(bioRow) bioRow.style.display='none';
-      // NOTE: We NEVER display profileData.gmail / email - it's private
     } else {
       if(pg) pg.textContent = localStorage.getItem('fed_gender') || 'Not set';
     }
@@ -143,11 +167,8 @@ async function openProfileView(senderName, avatarUrl, senderId=null){
 }
 function openFullImage(url){ if(!url) return; const fi=document.getElementById('full-pic-img'); if(fi) fi.src=url; const fo=document.getElementById('full-pic-overlay'); if(fo) fo.classList.remove('hidden'); }
 if(currentAvatar && avatarPreview) avatarPreview.src=currentAvatar;
-
 function formatTime(d){ const date=new Date(d); const diff=Math.floor((new Date()-date)/86400000); let dp=diff===0?"Today":diff===1?"Yesterday":date.toLocaleDateString([],{day:'2-digit',month:'short'}); return `${dp} • ${date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`; }
 async function hashPass(pass){ const enc = new TextEncoder().encode(pass); const buf = await crypto.subtle.digest('SHA-256', enc); return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
-
-// ===== ONLINE PRESENCE =====
 let presenceChannel; let onlineUsersMap = {};
 async function upsertOnlinePresence(){
   try{ if(!currentUserId) return; const userName = localStorage.getItem('fed_name') || localStorage.getItem('chat_username') || currentUser || 'Guest'; const userAvatar = localStorage.getItem('chat_avatar') || currentAvatar || ''; await supabaseClient.from('online_presence').upsert({ id: currentUserId, username: userName, avatar_url: userAvatar, room_id: currentRoom, is_online: true, last_seen: new Date().toISOString() }, { onConflict: 'id' }); }catch(e){ console.log("online_presence table missing?", e.message); }
@@ -174,12 +195,10 @@ function updateOnlineList(state){
 }
 window.addEventListener('beforeunload', ()=>{ markOffline(); });
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') upsertOnlinePresence(); });
-
 if(avatarInput){ avatarInput.addEventListener('change', ()=>{ const f=avatarInput.files[0]; if(!f||!avatarPreview) return; avatarPreview.src=URL.createObjectURL(f); }); }
 function handleGoogle(res){ try{ const data = JSON.parse(atob(res.credential.split('.')[1])); if(usernameInput) usernameInput.value = data.name; const gmailInput = document.getElementById('p_gmail'); if(gmailInput) gmailInput.value = data.email; if(avatarPreview) avatarPreview.src = data.picture; localStorage.setItem('fed_pic', data.picture); localStorage.setItem('fed_email', data.email); }catch(e){} }
 function closeProfile(){ const has = localStorage.getItem('fed_name') || localStorage.getItem('chat_username'); if(!has){ alert('Please set profile first'); return; } if(usernameOverlay){ usernameOverlay.classList.add('hidden'); usernameOverlay.style.display='none'; } const closeBtn = document.getElementById('closeProfileBtn'); if(closeBtn) closeBtn.style.display='none'; }
 function updateChatHeader(){ const name = localStorage.getItem('fed_name') || localStorage.getItem('chat_username') || currentUser || 'Guest'; const gender = localStorage.getItem('fed_gender') || ''; const room = localStorage.getItem('last_room') || currentRoom || 'general'; if(currentRoomLabel) currentRoomLabel.textContent = `Room: ${room} | You: ${name}${gender? ' • '+gender : ''}`; if(chatInput){ chatInput.value = ''; chatInput.placeholder = `${name} • #${room} > Type a message...`; } }
-
 if(usernameBtn){
   usernameBtn.addEventListener('click', async ()=>{
     const name = usernameInput.value.trim(); const genderEl = document.getElementById('p_gender'); const gmailEl = document.getElementById('p_gmail'); const gender = genderEl? genderEl.value : ''; const gmail = gmailEl? gmailEl.value.trim() : '';
@@ -190,14 +209,12 @@ if(usernameBtn){
       if(file){ const fileName=`${currentUserId}_${Date.now()}_${file.name}`; const { error }=await supabaseClient.storage.from('avatars').upload(fileName,file); if(error) throw error; const { data }=supabaseClient.storage.from('avatars').getPublicUrl(fileName); avatarUrl=data.publicUrl; } else if(localStorage.getItem('fed_pic')){ avatarUrl = localStorage.getItem('fed_pic'); }
       currentUser=name; currentAvatar=avatarUrl;
       localStorage.setItem('chat_username',name); localStorage.setItem('fed_name',name); localStorage.setItem('fed_gender',gender); if(gmail) localStorage.setItem('fed_email',gmail); if(avatarUrl) localStorage.setItem('chat_avatar',avatarUrl);
-      // Save PUBLIC info only (gender), Gmail stays private in localStorage
       await supabaseClient.from('user_profiles').upsert([{ id:currentUserId, username:name, avatar_url:avatarUrl, gender:gender, last_seen:new Date().toISOString() }],{ onConflict:'id' });
       if(usernameOverlay){ usernameOverlay.classList.add('hidden'); usernameOverlay.style.display='none'; }
       updateChatHeader(); loadMessages(); connectToRealtimeStream();
     }catch(err){ alert("Error: "+err.message); }finally{ usernameBtn.textContent="Save & Enter Chat"; usernameBtn.disabled=false; }
   });
 }
-
 async function loadMessages(){
   const { data, error }=await supabaseClient.from('messages').select('*').eq('room_id',currentRoom).order('created_at',{ascending:true});
   if(error){ console.error(error); return; } if(chatMessages) chatMessages.innerHTML="";
@@ -205,7 +222,7 @@ async function loadMessages(){
   updateChatHeader(); clearBadge(); createBadgeUI(); setupPresence();
 }
 
-// FIXED: Now takes senderId as 9th param
+// ===== CORRECTED: ALLOWS ALL FILES + SHOWS WARNING FOR RISKY ONES =====
 function appendMessageToFeed(text,fileUrl,fileType,senderName,avatarUrl,isOwn=false,createdAt=null,messageId=null,senderId=null){
   if(!chatMessages) return; let replyData = null; let displayText = text;
   if(text && text.startsWith('[REPLY_JSON]')){ try{ const endIdx = text.indexOf('[/REPLY_JSON]'); if(endIdx > 0){ const jsonStr = text.substring(12, endIdx); replyData = JSON.parse(jsonStr); displayText = text.substring(endIdx+13); } }catch(e){} }
@@ -217,9 +234,32 @@ function appendMessageToFeed(text,fileUrl,fileType,senderName,avatarUrl,isOwn=fa
   if(!isOwn && senderName){ const b=document.createElement('b'); b.textContent=senderName; b.style.cssText='font-size:12px; color:#075e54; display:block; margin-bottom:2px; cursor:pointer;'; b.onclick=()=>openProfileView(senderName,avatarUrl,senderId); bubble.appendChild(b); }
   if(displayText){ const s=document.createElement('div'); s.textContent=displayText; s.style.whiteSpace='pre-wrap'; s.style.wordBreak='break-word'; bubble.appendChild(s); }
   if(fileUrl){
-    if(fileType?.startsWith('image/')){ const img=document.createElement('img'); img.src=fileUrl; img.style.cssText='max-width:200px; border-radius:8px; margin-top:5px; cursor:pointer;'; img.onclick=()=>openFullImage(fileUrl); bubble.appendChild(img); }
-    else if(fileType?.startsWith('audio/')){ const a=document.createElement('audio'); a.src=fileUrl; a.controls=true; a.style.cssText='max-width:220px; margin-top:6px; display:block;'; bubble.appendChild(a); }
-    else { const a=document.createElement('a'); a.href=fileUrl; a.target='_blank'; a.textContent='📄 '+(displayText||'View File'); bubble.appendChild(a); }
+    // Detect risky file for download warning
+    const riskyExtList = ['.exe','.bat','.sh','.cmd','.apk','.msi','.dll','.js','.vbs','.app'];
+    const lowerUrl = (fileUrl || '').toLowerCase();
+    const lowerText = (displayText || '').toLowerCase();
+    const isRiskyFile = riskyExtList.some(ext => lowerUrl.endsWith(ext) || lowerText.endsWith(ext));
+
+    if(fileType?.startsWith('image/')){
+      const img=document.createElement('img'); img.src=fileUrl; img.style.cssText='max-width:200px; border-radius:8px; margin-top:5px; cursor:pointer;'; img.onclick=()=>openFullImage(fileUrl); bubble.appendChild(img);
+    }
+    else if(fileType?.startsWith('audio/')){
+      const a=document.createElement('audio'); a.src=fileUrl; a.controls=true; a.style.cssText='max-width:220px; margin-top:6px; display:block;'; bubble.appendChild(a);
+    }
+    else {
+      const fileWrap=document.createElement('div');
+      fileWrap.style.cssText='display:flex; flex-direction:column; gap:4px; margin-top:6px;';
+      const a=document.createElement('a'); a.href=fileUrl; a.target='_blank'; a.textContent='📄 '+(displayText||'Download File'); a.style.cssText='color:'+(isOwn?'white':'#4a148c')+'; font-weight:bold; text-decoration:underline;';
+      fileWrap.appendChild(a);
+      // ADD WARNING FOR RISKY FILES - FOR DOWNLOADER SAFETY
+      if(isRiskyFile){
+        const warn=document.createElement('span');
+        warn.textContent='⚠️ This is an executable file. Scan with antivirus before opening.';
+        warn.style.cssText='font-size:11px; color:#d32f2f; background:'+(isOwn?'rgba(255,255,255,0.2)':'#ffebee')+'; padding:4px 6px; border-radius:6px;';
+        fileWrap.appendChild(warn);
+      }
+      bubble.appendChild(fileWrap);
+    }
   }
   const meta=document.createElement('div'); meta.style.cssText='display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-top:4px;';
   const timeSpan=document.createElement('span'); timeSpan.textContent=formatTime(createdAt||new Date()); timeSpan.style.fontSize='10px'; meta.appendChild(timeSpan);
@@ -272,6 +312,13 @@ function connectToRealtimeStream(){
   setupPresence();
 }
 if(joinBtn) joinBtn.addEventListener('click',attemptJoinRoom);
+// Drawer join button with hover (if you have id="drawer-join")
+const drawerJoinBtn = document.getElementById('drawer-join');
+if(drawerJoinBtn){
+  drawerJoinBtn.addEventListener('click', attemptJoinRoom);
+  drawerJoinBtn.addEventListener('mouseenter', ()=>{ drawerJoinBtn.style.background='#6a1b9a'; });
+  drawerJoinBtn.addEventListener('mouseleave', ()=>{ drawerJoinBtn.style.background=''; });
+}
 if(roomPassBtn) roomPassBtn.addEventListener('click',confirmRoomPassword);
 if(roomPassClose) roomPassClose.addEventListener('click',()=>{ if(roomPassOverlay) roomPassOverlay.classList.add('hidden'); });
 if(sendBtn) sendBtn.addEventListener('click',sendMessage);
@@ -300,7 +347,7 @@ const unifiedPicker = ensurePickerUI(); let emojiPickerInstance = null; let pick
 function openPicker(tab){ const picker = ensurePickerUI(); if(!picker) return; if(picker.style.display!== 'none' && pickerOpenTab === tab){ picker.classList.add('hidden'); picker.style.display='none'; pickerOpenTab=null; return; } picker.classList.remove('hidden'); picker.style.display='flex'; pickerOpenTab=tab; picker.querySelectorAll('.picker-tab').forEach(t=>{ const isActive = t.dataset.tab===tab; t.classList.toggle('active', isActive); t.style.background = isActive? '#4a148c' : 'transparent'; t.style.color = isActive? 'white' : '#333'; }); picker.querySelectorAll('.picker-content').forEach(c=> { c.classList.add('hidden'); c.style.display='none'; }); const el=document.getElementById(`tab-${tab}`); if(el){ el.classList.remove('hidden'); el.style.display = tab==='gif'?'block':'grid'; if(tab==='emoji') el.style.display='block'; } if(tab==='gif') searchGifs("trending"); if(tab==='emoji') ensureEmojiPicker(); if(tab==='sticker') renderStickers(); }
 function ensureEmojiPicker(){ const tabEmoji=document.getElementById('tab-emoji'); if(!tabEmoji) return; if(emojiPickerInstance) return; if(!window.EmojiMart) return; try{ emojiPickerInstance = new EmojiMart.Picker({ onEmojiSelect:(emoji)=>{ if(chatInput){ chatInput.value+=emoji.native; chatInput.focus(); } }, theme:'light', previewPosition:'none', perLine:8, emojiSize:22, parent: tabEmoji }); }catch(e){} }
 const attachBtn = document.getElementById('attach-btn'); const emojiBtn = document.getElementById('emoji-btn');
-if(attachBtn){ attachBtn.onclick=(e)=>{ e.stopPropagation(); let menu = document.getElementById('attach-menu'); if(!menu){ const m = document.createElement('div'); m.id='attach-menu'; m.className='hidden'; m.style.cssText='position:fixed; bottom:70px; left:10px; background:white; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.2); padding:8px; z-index:9997; display:none; flex-direction:column; gap:4px;'; m.innerHTML=`<button id="attach-photo" style="padding:10px 14px; border:none; background:transparent; text-align:left; cursor:pointer;">📷 Photo/Video</button><button id="attach-file" style="padding:10px 14px; border:none; background:transparent; text-align:left; cursor:pointer;">📄 File</button><button id="attach-gif" style="padding:10px 14px; border:none; background:transparent; text-align:left; cursor:pointer;">🎞️ GIF</button><button id="attach-sticker" style="padding:10px 14px; border:none; background:transparent; text-align:left; cursor:pointer;">⭐ Sticker</button>`; document.body.appendChild(m); menu=m; m.querySelector('#attach-photo').onclick=()=>{ menu.classList.add('hidden'); menu.style.display='none'; if(fileInput){ fileInput.accept="image/*,video/*"; fileInput.click(); } }; m.querySelector('#attach-file').onclick=()=>{ menu.classList.add('hidden'); menu.style.display='none'; if(fileInput){ fileInput.accept=".pdf,.doc,.docx,.zip,.txt,image/*"; fileInput.click(); } }; m.querySelector('#attach-gif').onclick=()=>{ menu.classList.add('hidden'); menu.style.display='none'; openPicker('gif'); }; m.querySelector('#attach-sticker').onclick=()=>{ menu.classList.add('hidden'); menu.style.display='none'; openPicker('sticker'); }; } if(menu.classList.contains('hidden') || menu.style.display==='none'){ menu.classList.remove('hidden'); menu.style.display='flex'; } else { menu.classList.add('hidden'); menu.style.display='none'; } const picker = document.getElementById('unified-picker'); if(picker){ picker.classList.add('hidden'); picker.style.display='none'; pickerOpenTab=null; } }; }
+if(attachBtn){ attachBtn.onclick=(e)=>{ e.stopPropagation(); let menu = document.getElementById('attach-menu'); if(!menu){ const m = document.createElement('div'); m.id='attach-menu'; m.className='hidden'; m.style.cssText='position:fixed; bottom:70px; left:10px; background:white; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.2); padding:8px; z-index:9997; display:none; flex-direction:column; gap:4px;'; m.innerHTML=`<button id="attach-photo" style="padding:10px 14px; border:none; background:transparent; text-align:left; cursor:pointer;">📷 Photo/Video</button><button id="attach-file" style="padding:10px 14px; border:none; background:transparent; text-align:left; cursor:pointer;">📄 File</button><button id="attach-gif" style="padding:10px 14px; border:none; background:transparent; text-align:left; cursor:pointer;">🎞️ GIF</button><button id="attach-sticker" style="padding:10px 14px; border:none; background:transparent; text-align:left; cursor:pointer;">⭐ Sticker</button>`; document.body.appendChild(m); menu=m; m.querySelector('#attach-photo').onclick=()=>{ menu.classList.add('hidden'); menu.style.display='none'; if(fileInput){ fileInput.accept="image/*,video/*"; fileInput.click(); } }; m.querySelector('#attach-file').onclick=()=>{ menu.classList.add('hidden'); menu.style.display='none'; if(fileInput){ fileInput.accept="*/*"; fileInput.click(); } }; m.querySelector('#attach-gif').onclick=()=>{ menu.classList.add('hidden'); menu.style.display='none'; openPicker('gif'); }; m.querySelector('#attach-sticker').onclick=()=>{ menu.classList.add('hidden'); menu.style.display='none'; openPicker('sticker'); }; } if(menu.classList.contains('hidden') || menu.style.display==='none'){ menu.classList.remove('hidden'); menu.style.display='flex'; } else { menu.classList.add('hidden'); menu.style.display='none'; } const picker = document.getElementById('unified-picker'); if(picker){ picker.classList.add('hidden'); picker.style.display='none'; pickerOpenTab=null; } }; }
 if(emojiBtn){ emojiBtn.onclick=(e)=>{ e.stopPropagation(); const menu=document.getElementById('attach-menu'); if(menu){ menu.classList.add('hidden'); menu.style.display='none'; } openPicker('emoji'); }; }
 document.addEventListener('click', (e)=>{ if(e.target.classList.contains('picker-tab')) openPicker(e.target.dataset.tab); });
 const LOCAL_GIFS = ["https://media1.tenor.com/m/2uyENRuvV-0AAAAC/coding.gif","https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif"]; function searchGifs(q){ const gifResults=document.getElementById('gif-results'); if(!gifResults) return; gifResults.innerHTML=""; LOCAL_GIFS.forEach(full=>{ const img=document.createElement('img'); img.src=full; img.loading="lazy"; img.style.cssText="width:100%; height:110px; object-fit:cover; border-radius:8px; cursor:pointer; background:#f0f0f0;"; img.onclick=async()=>{ await ensureAuth(); await supabaseClient.from('messages').insert([{ text:"", room_id:currentRoom, file_url:full, file_type:"image/gif", sender_name:currentUser, avatar_url:currentAvatar, sender_id:currentUserId }]); const picker=document.getElementById('unified-picker'); if(picker){ picker.classList.add('hidden'); picker.style.display='none'; pickerOpenTab=null; } }; gifResults.appendChild(img); }); }
@@ -314,14 +361,10 @@ const replyPreview = document.getElementById('reply-preview'); const replyToName
 function setReply(id, senderName, text, fileUrl){ pendingReply = { id, sender_name: senderName, text: text||"", file_url: fileUrl||"" }; if(replyToName) replyToName.textContent = "Replying to " + senderName; if(replyToText) replyToText.textContent = text || (fileUrl? "📷 Photo" : "Message"); if(replyPreview){ replyPreview.classList.remove('hidden'); replyPreview.style.display='flex'; } if(chatInput) chatInput.focus(); }
 function clearReply(){ pendingReply = null; if(replyPreview){ replyPreview.classList.add('hidden'); replyPreview.style.display='none'; } }
 if(replyCancelBtn) replyCancelBtn.onclick = clearReply;
-// ===== CLICK OUTSIDE TO CLOSE - FOR GEAR POPUP & ALL OVERLAYS =====
 function enableOutsideClickClose() {
-  // 1. Gear / Profile Setup popup (username-overlay)
   if (usernameOverlay) {
     usernameOverlay.addEventListener('click', (e) => {
-      // If you click the dark background itself, not the white box inside
       if (e.target.id === 'username-overlay') {
-        // Only allow closing if user already has a profile (don't trap new users)
         if (currentUser || localStorage.getItem('chat_username') || localStorage.getItem('fed_name')) {
           usernameOverlay.classList.add('hidden');
           usernameOverlay.style.display = 'none';
@@ -329,8 +372,6 @@ function enableOutsideClickClose() {
       }
     });
   }
-
-  // 2. Room password popup
   if (roomPassOverlay) {
     roomPassOverlay.addEventListener('click', (e) => {
       if (e.target.id === 'room-pass-overlay') {
@@ -338,8 +379,6 @@ function enableOutsideClickClose() {
       }
     });
   }
-
-  // 3. Make sure profile overlays also close on backdrop (you already have but ensure)
   const profileOverlay = document.getElementById('profile-overlay');
   if (profileOverlay) {
     profileOverlay.addEventListener('click', (e) => {
@@ -348,15 +387,13 @@ function enableOutsideClickClose() {
       }
     });
   }
-
-  // 4. Escape key closes gear popup too
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      if (usernameOverlay && !usernameOverlay.classList.contains('hidden') && (currentUser || localStorage.getItem('fed_name'))) {
+      if (usernameOverlay &&!usernameOverlay.classList.contains('hidden') && (currentUser || localStorage.getItem('fed_name'))) {
         usernameOverlay.classList.add('hidden');
         usernameOverlay.style.display = 'none';
       }
-      if (roomPassOverlay && !roomPassOverlay.classList.contains('hidden')) {
+      if (roomPassOverlay &&!roomPassOverlay.classList.contains('hidden')) {
         roomPassOverlay.classList.add('hidden');
       }
     }
