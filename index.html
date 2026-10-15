@@ -149,7 +149,17 @@
 <div id="room-pass-overlay" class="password-overlay hidden" style="position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:9999;"><div class="password-box" style="background:white; padding:20px; border-radius:16px; width:92%; max-width:340px;"><h3 id="room-pass-title">Enter Password</h3><p id="room-pass-desc" style="font-size:13px; color:#666;"></p><div style="position:relative; margin:10px 0;"><input type="password" id="room-pass-input" placeholder="Room password" autocomplete="new-password" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd;"><span id="toggle-pass" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer;">👁️</span></div><p id="room-pass-error" style="color:red; font-size:12px; min-height:16px;"></p><div style="display:flex; gap:8px; margin-top:10px;"><button id="room-pass-close" type="button" style="flex:1; background:#eee; border:none; padding:10px; border-radius:10px; cursor:pointer;">Cancel</button><button id="room-pass-btn" type="button" style="flex:1; background:#4a148c; color:white; border:none; padding:10px; border-radius:10px; cursor:pointer; font-weight:bold;">Join Room</button></div></div></div>
 
 <audio id="chime-audio" src="https://assets.mixkit.co/sfx/preview/mixkit-message-pop-alert-2354.mp3" preload="auto"></audio>
-
+<!-- USER PROFILE POPUP -->
+<div id="user-profile-popup" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:99999; align-items:center; justify-content:center;">
+  <div style="background:white; border-radius:20px; padding:20px; width:90%; max-width:320px; text-align:center; position:relative;">
+    <button id="user-profile-close" style="position:absolute; top:10px; right:12px; background:#eee; border:none; width:32px; height:32px; border-radius:50%; cursor:pointer;">✕</button>
+    <img id="up-avatar" src="" style="width:80px; height:80px; border-radius:50%; object-fit:cover; margin:10px auto; display:block; background:#eee;">
+    <h3 id="up-name" style="margin:8px 0 4px; font-size:18px;">Name</h3>
+    <p id="up-gender" style="margin:0; color:#888; font-size:13px;"></p>
+    <p id="up-status" style="margin:12px 0; background:#f5f0ff; padding:8px; border-radius:10px; font-size:12px; color:#4a148c;">● Online in this room</p>
+    <button id="up-reply-btn" style="background:#4a148c; color:white; border:none; padding:10px 20px; border-radius:20px; width:100%; cursor:pointer; font-weight:bold;">Reply to this person</button>
+  </div>
+</div>
 <script src="chat.js"></script>
 <script>
 // DRAWER - NEW LEFT SLIDE + BACKDROP
@@ -235,5 +245,6 @@ if(stickerBtn) stickerBtn.onclick=()=>{ stickerPanel.classList.toggle('open'); i
 if(stickerClose) stickerClose.onclick=()=> stickerPanel.classList.remove('open');
 let t; if(gifSearch) gifSearch.oninput=()=>{ clearTimeout(t); t=setTimeout(()=> renderTab(currentTab, gifSearch.value), 500); };
 </script>
+
 </body>
 </html>

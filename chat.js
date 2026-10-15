@@ -166,12 +166,13 @@ function appendMessageToFeed(m){
   if(!m ||!chatMessages) return;
   const text = m.text; const fileUrl = m.file_url; const fileType = m.file_type; const senderName = m.sender_name; const avatarUrl = m.avatar_url; const isOwn = m.sender_id===currentUserId; const createdAt = m.created_at; const messageId = m.id; const replyToNameVal = m.reply_to_name; const replyToTextVal = m.reply_to_text;
   const row=document.createElement('div'); row.style.display='flex'; row.style.gap='8px'; row.style.alignItems='flex-end'; row.style.maxWidth='78%'; row.style.alignSelf=isOwn?'flex-end':'flex-start'; if(isOwn) row.style.marginLeft='auto'; row.dataset.id = messageId||'';
-  let avatarEl; if(avatarUrl){ avatarEl=document.createElement('img'); avatarEl.src=avatarUrl; avatarEl.style.cssText='width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;'; } else { avatarEl=document.createElement('div'); avatarEl.textContent=(senderName||'?').charAt(0).toUpperCase(); avatarEl.style.cssText='width:32px;height:32px;border-radius:50%;background:#4a148c;color:white;display:flex;align-items:center;justify-content:center;font-weight:bold;flex-shrink:0;'; }
+  let avatarEl; if(avatarUrl){ avatarEl=document.createElement('img'); avatarEl.src=avatarUrl; avatarEl.style.cssText='width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0; cursor:pointer;'; } else { avatarEl=document.createElement('div'); avatarEl.textContent=(senderName||'?').charAt(0).toUpperCase(); avatarEl.style.cssText='width:32px;height:32px;border-radius:50%;background:#4a148c;color:white;display:flex;align-items:center;justify-content:center;font-weight:bold;flex-shrink:0; cursor:pointer;'; }
+  avatarEl.onclick = ()=> showUserProfile(m.sender_id, senderName, avatarUrl);
   const bubble=document.createElement('div'); bubble.style.cssText = `background:${isOwn? '#e8dafa':'white'}; color:#1a1a1a; padding:8px 12px; border-radius:12px; box-shadow:0 1px 1px rgba(0,0,0,0.1); position:relative; max-width:100%;`; if(messageId) bubble.setAttribute('data-id',messageId);
   if(replyToNameVal){
     const quote=document.createElement('div'); quote.style.cssText='border-left:3px solid #4a148c; background:rgba(0,0,0,0.06); padding:5px 8px; margin-bottom:6px; border-radius:4px;'; quote.innerHTML=`<div style="font-size:11px; font-weight:bold; color:#4a148c;">${replyToNameVal}</div><div style="font-size:11px; color:#555; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px;">${replyToTextVal||''}</div>`; bubble.appendChild(quote);
   }
-  if(!isOwn && senderName){ const b=document.createElement('b'); b.textContent=senderName; b.style.cssText='font-size:12px;color:#075e54;display:block;margin-bottom:2px;'; bubble.appendChild(b); }
+  if(!isOwn && senderName){ const b=document.createElement('b'); b.textContent=senderName; b.style.cssText='font-size:12px;color:#075e54;display:block;margin-bottom:2px; cursor:pointer;'; b.onclick=()=> showUserProfile(m.sender_id, senderName, avatarUrl); bubble.appendChild(b); }
   if(text){ const s=document.createElement('div'); s.textContent=text; s.style.whiteSpace='pre-wrap'; s.style.wordBreak='break-word'; s.style.fontSize='14px'; bubble.appendChild(s); }
   if(fileUrl){
     if(fileType?.startsWith('image/') || fileUrl.includes('tenor') || fileUrl.includes('giphy')){ const img=document.createElement('img'); img.src=fileUrl; img.style.cssText='max-width:200px;border-radius:12px;margin-top:5px;cursor:pointer;display:block;'; bubble.appendChild(img); }
@@ -364,3 +365,56 @@ function renderCommunitiesPopup(){
 if(communitiesBtn){ communitiesBtn.onclick = ()=>{ renderCommunitiesPopup(); if(communitiesPopup){ communitiesPopup.style.display = communitiesPopup.style.display==='block'?'none':'block'; } }; }
 const communitiesPopupClose = document.getElementById('communities-popup-close'); if(communitiesPopupClose){ communitiesPopupClose.onclick = ()=>{ if(communitiesPopup) communitiesPopup.style.display='none'; }; }
 document.addEventListener('click', (e)=>{ if(communitiesPopup &&!communitiesPopup.contains(e.target) && e.target!==communitiesBtn){ communitiesPopup.style.display='none'; } });
+// --- USER PROFILE POPUP (NO SECRET INFO) ---
+const userProfilePopup = document.getElementById('user-profile-popup');
+const upAvatar = document.getElementById('up-avatar');
+const upName = document.getElementById('up-name');
+const upGender = document.getElementById('up-gender');
+const upClose = document.getElementById('user-profile-close');
+const upReplyBtn = document.getElementById('up-reply-btn');
+let upCurrentName = null;
+
+async function showUserProfile(senderId, senderName, avatarUrl){
+  upCurrentName = senderName;
+  if(upAvatar) upAvatar.src = avatarUrl || `https://via.placeholder.com/80/4a148c/fff?text=${encodeURIComponent(senderName.charAt(0))}`;
+  if(upName) upName.textContent = senderName;
+  if(upGender) upGender.textContent = "Loading...";
+  if(userProfilePopup) userProfilePopup.style.display = 'flex';
+
+  try{
+    // Only fetch public columns - NOT email
+    const {data} = await supabaseClient.from('user_profiles').select('username, avatar_url, gender').eq('id', senderId).maybeSingle();
+    if(data){
+      if(upName) upName.textContent = data.username || senderName;
+      if(upAvatar && data.avatar_url) upAvatar.src = data.avatar_url;
+      if(upGender) upGender.textContent = data.gender ? `${data.gender}` : '';
+    } else {
+      if(upGender) upGender.textContent = '';
+    }
+  }catch(e){
+    if(upGender) upGender.textContent = '';
+  }
+}
+
+if(upClose){
+  upClose.onclick = ()=> { if(userProfilePopup) userProfilePopup.style.display='none'; };
+}
+if(userProfilePopup){
+  userProfilePopup.addEventListener('click', (e)=>{ if(e.target===userProfilePopup) userProfilePopup.style.display='none'; });
+}
+if(upReplyBtn){
+  upReplyBtn.onclick = ()=>{
+    if(userProfilePopup) userProfilePopup.style.display='none';
+    if(chatInput){
+      chatInput.value = `@${upCurrentName} `;
+      chatInput.focus();
+    }
+  };
+}
+
+// Make avatars + names clickable
+function makeProfileClickable(el, senderId, senderName, avatarUrl){
+  if(!el) return;
+  el.style.cursor = 'pointer';
+  el.addEventListener('click', ()=> showUserProfile(senderId, senderName, avatarUrl));
+}
