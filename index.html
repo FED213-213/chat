@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
   <meta http-equiv="Cross-Origin-Embedder-Policy" content="unsafe-none">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://accounts.google.com https://apis.google.com https://*.supabase.co; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https:; img-src 'self' data: blob: https: https://*.supabase.co https://*.giphy.com https://*.tenor.com https://*.imgflip.com https://i.imgflip.com https://media.giphy.com https://c.tenor.com https://media.tenor.com; font-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://accounts.google.com https://*.googleusercontent.com wss://*.supabase.co https://g.tenor.com https://api.giphy.com https://api.tenor.com https://assets.mixkit.co; frame-src 'self' https://accounts.google.com; media-src 'self' blob: https: https://*.supabase.co https://*.giphy.com https://*.tenor.com https://assets.mixkit.co https://*.mixkit.co;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://accounts.google.com https://apis.google.com https://*.supabase.co; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https:; img-src 'self' data: blob: https: https://*.supabase.co https://*.giphy.com https://*.tenor.com https://*.imgflip.com https://i.imgflip.com https://media.giphy.com https://c.tenor.com https://media.tenor.com; font-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://accounts.google.com https://*.googleusercontent.com wss://*.supabase.co https://g.tenor.com https://api.giphy.com https://api.tenor.com https://cdn.jsdelivr.net https://cdn.freesound.org https://assets.mixkit.co; frame-src 'self' https://accounts.google.com; media-src 'self' blob: https: https://*.supabase.co https://*.giphy.com https://*.tenor.com https://cdn.freesound.org https://assets.mixkit.co https://*.mixkit.co;">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Private Room Chat</title>
   <link rel="icon" type="image/png" href="image/mylove.png">
@@ -15,119 +15,179 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-mart@latest/css/emoji-mart.css">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
-    *{box-sizing:border-box}
+    *{box-sizing:border-box;-webkit-tap-highlight-color: transparent;}
+    html,body{height:100%;}
     body { margin:0; height:100vh; height:100dvh; display:flex; flex-direction:column; background:#efe7dd; overflow:hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    .top-bar { background:#4a148c; color:white; padding:10px 12px; display:flex; align-items:center; gap:8px; flex-shrink:0; }
-    #menu-toggle{ background:rgba(255,255,255,0.2); border:none; color:white; width:38px; height:38px; border-radius:8px; cursor:pointer; font-size:22px; display:none; flex-shrink:0; }
-    #general-btn { background:#2e0a5c; color:white; border:1px solid rgba(255,255,255,0.3); padding:6px 12px; border-radius:20px; cursor:pointer; font-weight:bold; flex-shrink:0; }
-    #room-input { padding:7px 10px; border-radius:8px; border:none; width:110px; flex-shrink:0; }
-    #join-btn { background:white; color:#4a148c; border:none; padding:7px 12px; border-radius:8px; cursor:pointer; font-weight:bold; flex-shrink:0; }
+
+    /* TOP BAR */
+    .top-bar { background:#4a148c; color:white; padding:10px 12px; display:flex; align-items:center; gap:8px; flex-shrink:0; z-index:10; }
+    #menu-toggle{ background:rgba(255,255,255,0.18); border:none; color:white; width:40px; height:40px; border-radius:10px; cursor:pointer; font-size:22px; display:none; flex-shrink:0; align-items:center; justify-content:center; }
+    #general-btn { background:#2e0a5c; color:white; border:1px solid rgba(255,255,255,0.25); padding:7px 14px; border-radius:20px; cursor:pointer; font-weight:600; font-size:13px; flex-shrink:0; }
+    #room-input { padding:8px 12px; border-radius:20px; border:none; width:130px; flex-shrink:0; font-size:14px; outline:none; }
+    #join-btn { background:white; color:#4a148c; border:none; padding:8px 14px; border-radius:20px; cursor:pointer; font-weight:700; font-size:13px; flex-shrink:0; }
     #current-room-label { font-weight:600; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; font-size:14px; }
-    #online-count{ background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.3); padding:5px 10px; border-radius:20px; font-size:12px; display:flex; align-items:center; gap:6px; flex-shrink:0; cursor:pointer; font-weight:600; }
-    #online-count .dot{ width:8px; height:8px; background:#00e676; border-radius:50%; box-shadow:0 0 6px #00e676; animation:pulse 2s infinite; }
-    @keyframes pulse{ 0%{opacity:1} 50%{opacity:0.6} 100%{opacity:1} }
-    #change-profile-btn { background:rgba(255,255,255,0.2); border:none; color:white; width:36px; height:36px; border-radius:50%; cursor:pointer; font-size:18px; flex-shrink:0; }
-    #mobile-drawer{ position:fixed; top:0; left:0; right:0; background:#4a148c; color:white; z-index:9999; padding:16px; transform:translateY(-100%); transition:0.3s ease; box-shadow:0 8px 20px rgba(0,0,0,0.3); border-radius:0 0 16px 16px; max-height:90vh; overflow-y:auto; }
-    #mobile-drawer.open{ transform:translateY(0); }
-    #mobile-drawer .drawer-row{ display:flex; gap:8px; margin:10px 0; }
-    #mobile-drawer input{ flex:1; padding:10px; border-radius:10px; border:none; }
-    #mobile-drawer button{ padding:10px 16px; border-radius:10px; border:none; font-weight:bold; cursor:pointer; }
-    #drawer-close{ position:absolute; top:10px; right:12px; background:rgba(255,255,255,0.2); border:none; color:white; width:32px; height:32px; border-radius:50%; cursor:pointer; }
-    #chat-messages { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; -webkit-overflow-scrolling:touch; }
-    .bottom-bar { background:#f0f0f0; padding:8px 10px; display:flex; gap:6px; align-items:center; flex-shrink:0; padding-bottom: max(8px, env(safe-area-inset-bottom)); position:relative; }
-    .bottom-bar button.icon-btn { width:40px; height:40px; border-radius:50%; border:none; background:transparent; font-size:20px; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
-    .bottom-bar button.icon-btn:hover { background:#e0e0e0; }
-    #chat-input { flex:1; min-width:0; padding:11px 14px; border-radius:22px; border:1px solid #ccc; outline:none; font-size:16px; }
-    #send-btn { background:#4a148c; color:white; border:none; padding:10px 18px; border-radius:22px; cursor:pointer; flex-shrink:0; font-weight:bold; }
-    #online-popup{ position:fixed; top:60px; right:10px; width:300px; background:white; border-radius:16px; box-shadow:0 12px 30px rgba(0,0,0,0.25); z-index:9998; display:none; overflow:hidden; }
+    #online-count{ background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.25); padding:6px 10px; border-radius:20px; font-size:12px; display:flex; align-items:center; gap:6px; flex-shrink:0; cursor:pointer; font-weight:600; }
+    #online-count .dot{ width:8px; height:8px; background:#00e676; border-radius:50%; box-shadow:0 0 6px #00e676; }
+    .top-icon{ background:rgba(255,255,255,0.18); border:none; color:white; width:40px; height:40px; border-radius:50%; cursor:pointer; font-size:18px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+
+    /* DRAWER - NOW SLIDES FROM LEFT ON PHONE */
+    #mobile-drawer{ position:fixed; top:0; left:0; bottom:0; width:82%; max-width:320px; background:#2e0a5c; color:white; z-index:9999; padding:20px 16px; transform:translateX(-105%); transition:0.3s cubic-bezier(.2,.8,.2,1); box-shadow:8px 0 30px rgba(0,0,0,0.4); display:flex; flex-direction:column; }
+    #mobile-drawer.open{ transform:translateX(0); }
+    #drawer-close{ position:absolute; top:12px; right:12px; background:rgba(255,255,255,0.15); border:none; color:white; width:36px; height:36px; border-radius:50%; cursor:pointer; font-size:16px; }
+    #drawer-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9998; display:none; }
+    #drawer-backdrop.open{ display:block; }
+
+    /* CHAT AREA */
+    #chat-messages { flex:1; overflow-y:auto; padding:14px 12px; display:flex; flex-direction:column; gap:10px; -webkit-overflow-scrolling:touch; scroll-behavior:smooth; }
+    
+    /* BOTTOM BAR */
+    .bottom-bar { background:#f7f7f7; padding:8px 10px; display:flex; gap:6px; align-items:center; flex-shrink:0; padding-bottom: max(8px, env(safe-area-inset-bottom)); border-top:1px solid #e0e0e0; }
+    .bottom-bar button.icon-btn { width:42px; height:42px; border-radius:50%; border:none; background:transparent; font-size:20px; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+    #chat-input { flex:1; min-width:0; padding:12px 16px; border-radius:24px; border:1px solid #ddd; outline:none; font-size:16px; background:white; }
+    #send-btn { background:#4a148c; color:white; border:none; padding:11px 20px; border-radius:24px; cursor:pointer; flex-shrink:0; font-weight:700; font-size:14px; }
+
+    /* POPUPS */
+    #online-popup{ position:fixed; top:62px; right:12px; width:320px; background:white; border-radius:16px; box-shadow:0 12px 30px rgba(0,0,0,0.25); z-index:9997; display:none; overflow:hidden; }
     #online-popup.open{ display:block; }
     #online-popup-header{ background:#4a148c; color:white; padding:12px 14px; font-weight:bold; display:flex; justify-content:space-between; align-items:center; }
-    #sticker-panel{ position:fixed; bottom:70px; right:10px; width:340px; max-width:95vw; height:380px; background:white; border-radius:18px; box-shadow:0 12px 40px rgba(0,0,0,0.35); z-index:9997; display:none; flex-direction:column; overflow:hidden; }
+
+    #sticker-panel{ position:fixed; bottom:72px; right:12px; width:360px; max-width:96vw; height:400px; background:white; border-radius:20px; box-shadow:0 16px 40px rgba(0,0,0,0.35); z-index:9996; display:none; flex-direction:column; overflow:hidden; }
     #sticker-panel.open{ display:flex; }
-    #sticker-tabs{ display:flex; gap:6px; padding:8px; background:#f5f0ff; }
-    .sticker-tab{ flex:1; padding:8px; border:none; border-radius:10px; cursor:pointer; font-weight:600; font-size:13px; }
+    #sticker-tabs{ display:flex; gap:6px; padding:10px; background:#f5f0ff; }
+    .sticker-tab{ flex:1; padding:10px; border:none; border-radius:12px; cursor:pointer; font-weight:600; font-size:13px; background:#eee; }
     .sticker-tab.active{ background:#4a148c; color:white; }
     #sticker-grid{ flex:1; overflow-y:auto; padding:10px; display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-    .sticker-item{ cursor:pointer; background:#faf7ff; border-radius:12px; aspect-ratio:1; display:flex; align-items:center; justify-content:center; overflow:hidden; font-size:36px; }
+    .sticker-item{ cursor:pointer; background:#faf7ff; border-radius:14px; aspect-ratio:1; display:flex; align-items:center; justify-content:center; overflow:hidden; font-size:34px; }
     .sticker-item img{ width:100%; height:100%; object-fit:cover; }
-    .sticker-item:hover{ background:#f0eaff; transform:scale(1.05); }
-    @media (max-width: 680px){
-      #menu-toggle{ display:flex; align-items:center; justify-content:center; }
-      #general-btn, #room-input, #join-btn{ display:none; }
-      #current-room-label{ font-size:12px; }
-      #online-count{ padding:4px 8px; font-size:11px; }
-      #chat-input{ font-size:16px; }
-      #chat-messages{ padding:10px; }
-      .bottom-bar{ gap:4px; padding:6px 8px; }
-      .bottom-bar button.icon-btn{ width:36px; height:36px; font-size:18px; }
-      #online-popup{ right:5px; left:5px; width:auto; top:55px; }
-      #sticker-panel{ right:5px; left:5px; width:auto; bottom:65px; }
+
+    #reply-preview{ background:#fff3e0; border-top:1px solid #ffcc80; padding:10px 14px; align-items:center; justify-content:space-between; gap:10px; }
+    #reply-preview.hidden{ display:none!important; }
+
+    /* DESKTOP ONLY */
+    @media (min-width: 681px){
+      #drawer-backdrop{ display:none!important; }
     }
+
+    /* PHONE FIXES */
+    @media (max-width: 680px){
+      #menu-toggle{ display:flex; }
+      #general-btn, #room-input, #join-btn{ display:none; }
+      .top-bar{ padding:10px 10px; gap:8px; }
+      #current-room-label{ font-size:13px; font-weight:700; }
+      #online-count{ padding:6px 9px; }
+      .top-icon{ width:38px; height:38px; font-size:17px; }
+      #chat-messages{ padding:10px 8px; gap:8px; }
+      .bottom-bar{ gap:4px; padding:8px 8px; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+      .bottom-bar button.icon-btn{ width:40px; height:40px; }
+      #chat-input{ padding:11px 14px; font-size:16px; }
+      #send-btn{ padding:10px 16px; }
+      #online-popup{ right:8px; left:8px; width:auto; top:58px; }
+      #sticker-panel{ right:0; left:0; width:auto; bottom:0; border-radius:20px 20px 0 0; height:52vh; max-height:420px; }
+      #communities-popup{ right:8px!important; left:8px!important; width:auto!important; }
+    }
+
     .hidden { display:none!important; }
   </style>
 </head>
 <body>
 <form autocomplete="off" style="display:none;"><input type="text" name="prevent_autofill" /><input type="password" name="prevent_autofill2" /></form>
+
 <div class="top-bar">
   <button id="menu-toggle" type="button">☰</button>
   <button id="general-btn" type="button"># General</button>
   <input type="text" id="room-input" placeholder="Room name" autocomplete="off">
   <button id="join-btn" type="button">Join</button>
   <span id="current-room-label">Room: general | You: Guest</span>
-  <div id="online-count" title="Who's online"><span class="dot"></span><span id="online-number">0 online</span></div>
-  <button id="communities-btn" type="button" title="My Communities" style="background:rgba(255,255,255,0.2); border:none; color:white; width:36px; height:36px; border-radius:50%; cursor:pointer; font-size:18px; flex-shrink:0;">👥</button>
-  <button id="change-profile-btn" type="button" title="Profile">⚙️</button>
+  <div id="online-count"><span class="dot"></span><span id="online-number">0</span></div>
+  <button id="communities-btn" class="top-icon" type="button" title="My Communities">👥</button>
+  <button id="change-profile-btn" class="top-icon" type="button" title="Profile">⚙️</button>
 </div>
-<div id="online-popup"><div id="online-popup-header"><span>🟢 Online in this room</span><button id="online-popup-close" style="background:rgba(255,255,255,0.2); border:none; color:white; width:28px; height:28px; border-radius:50%; cursor:pointer;">✕</button></div><div id="online-users-container" style="padding:10px; max-height:280px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div></div>
-<div id="communities-popup" style="position:fixed; top:60px; right:50px; width:320px; background:white; border-radius:16px; box-shadow:0 12px 30px rgba(0,0,0,0.25); z-index:9998; display:none; overflow:hidden;"><div style="background:#4a148c; color:white; padding:12px 14px; font-weight:bold; display:flex; justify-content:space-between; align-items:center;"><span>🏘️ My Communities</span><button id="communities-popup-close" style="background:rgba(255,255,255,0.2); border:none; color:white; width:28px; height:28px; border-radius:50%; cursor:pointer;">✕</button></div><div id="communities-list-popup" style="padding:10px; max-height:320px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div></div>
-<div id="mobile-drawer"><button id="drawer-close" type="button">✕</button><div style="font-weight:bold; font-size:18px; margin-bottom:4px;">Private Room Chat</div><div id="drawer-info" style="opacity:0.9; font-size:13px; margin-bottom:12px;">Room: general | You: Guest</div><div id="online-list-drawer" style="margin:12px 0; background:rgba(0,0,0,0.25); border-radius:12px; padding:10px;"><div style="font-size:12px; font-weight:bold; opacity:0.9; margin-bottom:8px; display:flex; justify-content:space-between;"><span>🟢 Online Now</span><span id="online-number-drawer">0</span></div><div id="online-users-container-drawer" style="display:flex; flex-direction:column; gap:6px; max-height:140px; overflow-y:auto;"></div></div><div class="drawer-row"><button id="drawer-general" type="button" style="background:#2e0a5c; color:white; flex:1;"># General</button><button id="drawer-profile" type="button" style="background:rgba(255,255,255,0.2); color:white;">⚙️ Profile</button></div><div class="drawer-row"><input type="text" id="drawer-room-input" placeholder="Enter room name (e.g. 2k26)" autocomplete="off"><button id="drawer-join" type="button" style="background:white; color:#4a148c;">Join</button></div></div>
+
+<div id="drawer-backdrop"></div>
+<div id="mobile-drawer">
+  <button id="drawer-close" type="button">✕</button>
+  <div style="font-weight:800; font-size:22px; margin:6px 0 2px;">Private Room Chat</div>
+  <div id="drawer-info" style="opacity:0.85; font-size:13px; margin-bottom:18px;">Room: general | You: Guest</div>
+  
+  <div id="online-list-drawer" style="background:rgba(0,0,0,0.25); border-radius:14px; padding:12px; margin-bottom:16px;">
+    <div style="font-size:12px; font-weight:700; opacity:0.9; margin-bottom:8px; display:flex; justify-content:space-between;"><span>🟢 Online Now</span><span id="online-number-drawer">0</span></div>
+    <div id="online-users-container-drawer" style="display:flex; flex-direction:column; gap:6px; max-height:180px; overflow-y:auto;"></div>
+  </div>
+
+  <div style="display:flex; gap:8px; margin:8px 0;">
+    <button id="drawer-general" type="button" style="background:white; color:#4a148c; flex:1; padding:12px; border-radius:12px; border:none; font-weight:700;"># General</button>
+    <button id="drawer-profile" type="button" style="background:rgba(255,255,255,0.15); color:white; padding:12px 16px; border-radius:12px; border:none;">⚙️ Profile</button>
+  </div>
+  <div style="display:flex; gap:8px; margin:12px 0;">
+    <input type="text" id="drawer-room-input" placeholder="Enter room name (e.g. 2k26)" autocomplete="off" style="flex:1; padding:12px; border-radius:12px; border:none; font-size:15px;">
+    <button id="drawer-join" type="button" style="background:#00e676; color:#1a1a1a; padding:12px 18px; border-radius:12px; border:none; font-weight:800;">Join</button>
+  </div>
+  <div style="margin-top:auto; font-size:11px; opacity:0.6; padding-top:12px; border-top:1px solid rgba(255,255,255,0.15);">Tip: Tap a message > Reply to quote it</div>
+</div>
+
+<div id="online-popup"><div id="online-popup-header"><span>🟢 Online in this room</span><button id="online-popup-close" style="background:rgba(255,255,255,0.2); border:none; color:white; width:28px; height:28px; border-radius:50%; cursor:pointer;">✕</button></div><div id="online-users-container" style="padding:10px; max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div></div>
+
+<div id="communities-popup" style="position:fixed; top:60px; right:12px; width:320px; background:white; border-radius:16px; box-shadow:0 12px 30px rgba(0,0,0,0.25); z-index:9997; display:none; overflow:hidden;"><div style="background:#4a148c; color:white; padding:12px 14px; font-weight:bold; display:flex; justify-content:space-between; align-items:center;"><span>🏘️ My Communities</span><button id="communities-popup-close" style="background:rgba(255,255,255,0.2); border:none; color:white; width:28px; height:28px; border-radius:50%; cursor:pointer;">✕</button></div><div id="communities-list-popup" style="padding:10px; max-height:320px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div></div>
+
 <div id="chat-messages"></div>
-<div id="reply-preview" class="hidden" style="background:#fff3e0; border-top:1px solid #ffcc80; padding:8px 12px; display:none; align-items:center; justify-content:space-between; gap:10px;"><div style="flex:1; overflow:hidden;"><div id="reply-to-name" style="font-size:12px; font-weight:bold; color:#4a148c;"></div><div id="reply-to-text" style="font-size:12px; color:#555; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div></div><button id="reply-cancel" type="button" style="background:#eee; border:none; width:28px; height:28px; border-radius:50%; cursor:pointer;">×</button></div>
-<div id="sticker-panel"><div id="sticker-tabs"><button class="sticker-tab active" data-tab="stickers">Stickers</button><button class="sticker-tab" data-tab="gifs">GIFs</button><button class="sticker-tab" data-tab="memes">Memes</button><button id="sticker-close" style="background:#eee; border:none; width:28px; height:28px; border-radius:50%; cursor:pointer; margin-left:4px;">✕</button></div><div style="padding:8px; display:none;" id="gif-search-wrap"><input id="gif-search" placeholder="Search GIFs / memes..." style="width:100%; padding:10px; border-radius:10px; border:1px solid #ddd;"></div><div id="sticker-grid"></div></div>
-<div class="bottom-bar"><button id="attach-btn" class="icon-btn" type="button">📎</button><input type="file" id="file-input" hidden><button id="sticker-btn" class="icon-btn" type="button" title="Stickers/GIFs">🌟</button><input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off"><button id="mic-btn" class="icon-btn" type="button">🎤</button><button id="send-btn" type="button">Send</button></div>
-<div id="username-overlay" class="password-overlay" style="position:fixed; inset:0; background:rgba(0,0,0,0.75); display:flex; z-index:10000; align-items:center; justify-content:center; backdrop-filter:blur(5px);"><div class="password-box" style="background:white; width:92%; max-width:380px; padding:22px; border-radius:18px;"><h3 style="text-align:center;">Set Your Profile</h3><img id="avatar-preview" src="https://via.placeholder.com/100/4a148c/ffffff?text=?" style="width:80px; height:80px; border-radius:50%; object-fit:cover; margin:0 auto; display:block;"><input type="file" id="avatar-input" accept="image/*" style="margin:10px 0; width:100%;"><input type="text" id="username-input" placeholder="Display name *required" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; margin:6px 0;"><select id="p_gender" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; margin:6px 0;"><option value="">Gender *required</option><option value="male">Male</option><option value="female">Female</option><option value="notsay">Prefer not to say</option></select><input type="email" id="p_gmail" placeholder="Gmail (optional)" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; margin:6px 0;"><div style="margin:12px 0; border-top:1px solid #eee; padding-top:12px;"><div id="g_id_onload" data-client_id="995545702819-e5lulcophiasgkuche8m72ggrng23a4r.apps.googleusercontent.com" data-callback="handleGoogle" data-auto_prompt="false"></div><div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="outline" data-text="signin_with" data-size="large" data-width="320"></div></div><button id="username-btn" type="button" style="width:100%; margin-top:12px; background:#4a148c; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold;">Save & Enter Chat</button><button id="closeProfileBtn" type="button" style="width:100%; margin-top:8px; background:#eee; color:#333; border:none; padding:10px; border-radius:10px; display:none;">Cancel</button></div></div>
+
+<div id="reply-preview" class="hidden" style="display:flex;"><div style="flex:1; overflow:hidden;"><div id="reply-to-name" style="font-size:12px; font-weight:800; color:#4a148c;"></div><div id="reply-to-text" style="font-size:12px; color:#555; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div></div><button id="reply-cancel" type="button" style="background:#eee; border:none; width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:18px;">×</button></div>
+
+<div id="sticker-panel"><div id="sticker-tabs"><button class="sticker-tab active" data-tab="stickers">Stickers</button><button class="sticker-tab" data-tab="gifs">GIFs</button><button class="sticker-tab" data-tab="memes">Memes</button><button id="sticker-close" style="background:#eee; border:none; width:30px; height:30px; border-radius:50%; cursor:pointer; margin-left:4px;">✕</button></div><div style="padding:8px; display:none;" id="gif-search-wrap"><input id="gif-search" placeholder="Search GIFs / memes..." style="width:100%; padding:12px; border-radius:12px; border:1px solid #ddd; font-size:15px;"></div><div id="sticker-grid"></div></div>
+
+<div class="bottom-bar">
+  <button id="attach-btn" class="icon-btn" type="button">📎</button>
+  <input type="file" id="file-input" hidden>
+  <button id="sticker-btn" class="icon-btn" type="button" title="Stickers/GIFs">🌟</button>
+  <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off" enterkeyhint="send">
+  <button id="mic-btn" class="icon-btn" type="button">🎤</button>
+  <button id="send-btn" type="button">Send</button>
+</div>
+
+<div id="username-overlay" class="password-overlay" style="position:fixed; inset:0; background:rgba(0,0,0,0.75); display:flex; z-index:10000; align-items:center; justify-content:center; backdrop-filter:blur(5px);"><div class="password-box" style="background:white; width:92%; max-width:380px; padding:22px; border-radius:18px;"><h3 style="text-align:center; margin-top:0;">Set Your Profile</h3><img id="avatar-preview" src="https://via.placeholder.com/100/4a148c/ffffff?text=?" style="width:80px; height:80px; border-radius:50%; object-fit:cover; margin:0 auto; display:block;"><input type="file" id="avatar-input" accept="image/*" style="margin:10px 0; width:100%;"><input type="text" id="username-input" placeholder="Display name *required" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; margin:6px 0;"><select id="p_gender" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; margin:6px 0;"><option value="">Gender *required</option><option value="male">Male</option><option value="female">Female</option><option value="notsay">Prefer not to say</option></select><input type="email" id="p_gmail" placeholder="Gmail (optional)" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; margin:6px 0;"><div style="margin:12px 0; border-top:1px solid #eee; padding-top:12px;"><div id="g_id_onload" data-client_id="995545702819-e5lulcophiasgkuche8m72ggrng23a4r.apps.googleusercontent.com" data-callback="handleGoogle" data-auto_prompt="false"></div><div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="outline" data-text="signin_with" data-size="large" data-width="320"></div></div><button id="username-btn" type="button" style="width:100%; margin-top:12px; background:#4a148c; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold;">Save & Enter Chat</button><button id="closeProfileBtn" type="button" style="width:100%; margin-top:8px; background:#eee; color:#333; border:none; padding:10px; border-radius:10px; display:none;">Cancel</button></div></div>
+
 <div id="room-pass-overlay" class="password-overlay hidden" style="position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:9999;"><div class="password-box" style="background:white; padding:20px; border-radius:16px; width:92%; max-width:340px;"><h3 id="room-pass-title">Enter Password</h3><p id="room-pass-desc" style="font-size:13px; color:#666;"></p><div style="position:relative; margin:10px 0;"><input type="password" id="room-pass-input" placeholder="Room password" autocomplete="new-password" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd;"><span id="toggle-pass" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer;">👁️</span></div><p id="room-pass-error" style="color:red; font-size:12px; min-height:16px;"></p><div style="display:flex; gap:8px; margin-top:10px;"><button id="room-pass-close" type="button" style="flex:1; background:#eee; border:none; padding:10px; border-radius:10px; cursor:pointer;">Cancel</button><button id="room-pass-btn" type="button" style="flex:1; background:#4a148c; color:white; border:none; padding:10px; border-radius:10px; cursor:pointer; font-weight:bold;">Join Room</button></div></div></div>
+
+<audio id="chime-audio" src="https://assets.mixkit.co/sfx/preview/mixkit-message-pop-alert-2354.mp3" preload="auto"></audio>
 
 <script src="chat.js"></script>
 <script>
-// --- ONLY DRAWER + STICKER UI - NO DUPLICATES ---
+// DRAWER - NEW LEFT SLIDE + BACKDROP
 const menuToggle = document.getElementById('menu-toggle');
 const drawer = document.getElementById('mobile-drawer');
 const drawerClose = document.getElementById('drawer-close');
+const drawerBackdrop = document.getElementById('drawer-backdrop');
 const onlineCountBtn = document.getElementById('online-count');
 const onlinePopup = document.getElementById('online-popup');
 const onlinePopupClose = document.getElementById('online-popup-close');
 
-if(menuToggle) menuToggle.addEventListener('click', ()=> drawer.classList.add('open'));
-if(drawerClose) drawerClose.addEventListener('click', ()=> drawer.classList.remove('open'));
+function openDrawer(){ drawer.classList.add('open'); drawerBackdrop.classList.add('open'); document.body.style.overflow='hidden'; }
+function closeDrawer(){ drawer.classList.remove('open'); drawerBackdrop.classList.remove('open'); document.body.style.overflow=''; }
+
+if(menuToggle) menuToggle.addEventListener('click', openDrawer);
+if(drawerClose) drawerClose.addEventListener('click', closeDrawer);
+if(drawerBackdrop) drawerBackdrop.addEventListener('click', closeDrawer);
 if(onlineCountBtn) onlineCountBtn.addEventListener('click', ()=>{ onlinePopup.classList.toggle('open'); });
 if(onlinePopupClose) onlinePopupClose.addEventListener('click', ()=>{ onlinePopup.classList.remove('open'); });
 
-document.getElementById('drawer-general')?.addEventListener('click', ()=>{
-  document.getElementById('general-btn')?.click();
-  drawer.classList.remove('open');
-});
+// Sync room label to drawer
+setInterval(()=>{ const l=document.getElementById('current-room-label')?.innerText; const d=document.getElementById('drawer-info'); if(l&&d) d.innerText=l; const n=document.getElementById('online-number')?.innerText; const nd=document.getElementById('online-number-drawer'); if(n&&nd) nd.innerText=n; }, 600);
+
+document.getElementById('drawer-general')?.addEventListener('click', ()=>{ document.getElementById('general-btn')?.click(); closeDrawer(); });
 document.getElementById('drawer-join')?.addEventListener('click', ()=>{
   const val = document.getElementById('drawer-room-input').value.trim();
   const roomIn = document.getElementById('room-input');
   if(roomIn){ roomIn.value = val; }
   document.getElementById('join-btn')?.click();
   document.getElementById('drawer-room-input').value = "";
-  drawer.classList.remove('open');
+  closeDrawer();
 });
 document.getElementById('drawer-profile')?.addEventListener('click', ()=>{
   document.getElementById('change-profile-btn')?.click();
-  drawer.classList.remove('open');
+  closeDrawer();
 });
 
-document.addEventListener('click', (e)=>{
-  const sp = document.getElementById('sticker-panel');
-  if(!onlinePopup.contains(e.target) && !onlineCountBtn.contains(e.target) && !sp.contains(e.target) && e.target.id!=='sticker-btn'){
-    onlinePopup.classList.remove('open');
-  }
-});
-
-// --- STICKER / GIF / MEME LOGIC ---
+// STICKERS
 const stickerBtn = document.getElementById('sticker-btn');
 const stickerPanel = document.getElementById('sticker-panel');
 const stickerGrid = document.getElementById('sticker-grid');
@@ -160,7 +220,7 @@ function renderTab(tab, query=""){
         img.onclick=()=>{ window.sendSticker(url); stickerPanel.classList.remove('open'); };
         stickerGrid.appendChild(img);
       });
-    }).catch(()=>{ stickerGrid.innerHTML="<div style='grid-column:1/3; padding:20px; text-align:center; color:#888;'>No results.</div>"; });
+    }).catch(()=>{ stickerGrid.innerHTML="<div style='grid-column:1/-1; padding:20px; text-align:center; color:#888;'>No results.</div>"; });
   }
 }
 document.querySelectorAll('.sticker-tab').forEach(b=>{
@@ -175,6 +235,5 @@ if(stickerBtn) stickerBtn.onclick=()=>{ stickerPanel.classList.toggle('open'); i
 if(stickerClose) stickerClose.onclick=()=> stickerPanel.classList.remove('open');
 let t; if(gifSearch) gifSearch.oninput=()=>{ clearTimeout(t); t=setTimeout(()=> renderTab(currentTab, gifSearch.value), 500); };
 </script>
-<audio id="chime-audio" src="https://assets.mixkit.co/sfx/preview/mixkit-message-pop-alert-2354.mp3" preload="auto"></audio>
 </body>
 </html>

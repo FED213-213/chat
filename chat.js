@@ -36,6 +36,7 @@ let currentUser = localStorage.getItem('fed_name') || null;
 let currentAvatar = localStorage.getItem('chat_avatar') || null;
 let currentUserId = null;
 let pendingRoom = null, pendingMode = null, realtimeChannel = null;
+let presenceChannel = null;
 let pendingFile = null;
 let pendingReply = null;
 
@@ -54,13 +55,17 @@ function saveJoinedRoom(roomName){ let rooms=getJoinedRooms(); if(!rooms.include
 function formatTime(d){ const date=new Date(d); const diff=Math.floor((new Date()-date)/86400000); let dp=diff===0?"Today":diff===1?"Yesterday":date.toLocaleDateString([],{day:'2-digit',month:'short'}); return `${dp} • ${date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`; }
 async function hashPass(pass){ const enc=new TextEncoder().encode(pass); const buf=await crypto.subtle.digest('SHA-256',enc); return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
 
-// --- CHIME + ALERT ---
+// --- CHIME + ALERT (NO CSP BLOCK) ---
 let chimeAudio = document.getElementById('chime-audio');
 if(!chimeAudio){
-  chimeAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-message-pop-alert-2354.mp3");
-  chimeAudio.preload = "auto";
-  chimeAudio.volume = 0.7;
+  chimeAudio = new Audio();
+  chimeAudio.src = "https://cdn.freesound.org/previews/131/131142_2337290-lq.mp3";
+  chimeAudio.volume = 0.6;
 }
+let audioUnlocked = false;
+function unlockAudio(){ if(!audioUnlocked){ chimeAudio.play().then(()=>{ chimeAudio.pause(); chimeAudio.currentTime=0; }).catch(()=>{}); audioUnlocked=true; } }
+document.addEventListener('click', unlockAudio, {once:true});
+
 let originalTitle = document.title;
 let unreadCount = 0;
 function playChime(){
@@ -76,30 +81,38 @@ function flashTitle(){
   }
 }
 document.addEventListener('visibilitychange', ()=>{
-  if(!document.hidden){
-    unreadCount = 0;
-    document.title = originalTitle;
-  }
+  if(!document.hidden){ unreadCount = 0; document.title = originalTitle; }
 });
 
 async function loadMessages(){
   let hashedPass = getStoredRoomHash(currentRoom);
   if(currentRoom === "general"){ hashedPass = ""; }
   if(!hashedPass && currentRoom!== "general"){
-    if(chatMessages) chatMessages.innerHTML = "<div style='padding:30px;text-align:center;color:#888'>🔒 This room is private. Enter password to view.</div>";
+    if(chatMessages) chatMessages.innerHTML = "<div style='padding:30px;text-align:center;color:#888'>🔒 Private room. Enter password.</div>";
     return;
   }
   const { data, error } = await supabaseClient.rpc('get_messages_secure', { room_name: currentRoom, pass_hash: hashedPass });
   if(error){ console.error(error); return; }
   if(chatMessages) chatMessages.innerHTML="";
-  data.forEach(m=> appendMessageToFeed(m));
+  (data||[]).forEach(m=> appendMessageToFeed(m));
   updateChatHeader();
 }
 
 window.sendSticker = async function(sticker){
   await ensureAuth();
+  unlockAudio();
   const isUrl = sticker.startsWith('http');
-  await supabaseClient.from('messages').insert([{ text: isUrl? "" : sticker, file_url: isUrl? sticker : null, file_type: isUrl? "image/gif" : null, room_id: currentRoom, sender_name: currentUser, avatar_url: currentAvatar, sender_id: currentUserId }]);
+  let payload = { text: isUrl? "" : sticker, file_url: isUrl? sticker : null, file_type: isUrl? "image/gif" : null, room_id: currentRoom, sender_name: currentUser, avatar_url: currentAvatar, sender_id: currentUserId };
+  if(pendingReply){
+    payload.reply_to_name = pendingReply.name;
+    payload.reply_to_text = pendingReply.text;
+  }
+  const { error } = await supabaseClient.from('messages').insert([payload]);
+  if(error && error.message.includes('reply_to')){
+    delete payload.reply_to_name; delete payload.reply_to_text; delete payload.reply_to_id;
+    await supabaseClient.from('messages').insert([payload]);
+  }
+  clearReply();
 }
 
 function ensureFilePreviewBox(){
@@ -129,16 +142,16 @@ function clearFilePreview(){
   if(box) box.style.display='none';
 }
 
-// REPLY LOGIC - FIXED FOR hidden class
+// REPLY - FIXED
 function setReply(id, name, text){
-  pendingReply = {id, name, text: (text||'').substring(0,80)};
+  pendingReply = {id, name, text: (text||'File').substring(0,120)};
   if(replyToName) replyToName.textContent = "Replying to " + name;
-  if(replyToText) replyToText.textContent = text||'';
+  if(replyToText) replyToText.textContent = text||'File';
   if(replyPreview){
     replyPreview.classList.remove('hidden');
     replyPreview.style.display = 'flex';
   }
-  if(chatInput) chatInput.focus();
+  chatInput?.focus();
 }
 function clearReply(){
   pendingReply = null;
@@ -152,11 +165,11 @@ if(replyCancel) replyCancel.onclick = clearReply;
 function appendMessageToFeed(m){
   if(!m ||!chatMessages) return;
   const text = m.text; const fileUrl = m.file_url; const fileType = m.file_type; const senderName = m.sender_name; const avatarUrl = m.avatar_url; const isOwn = m.sender_id===currentUserId; const createdAt = m.created_at; const messageId = m.id; const replyToNameVal = m.reply_to_name; const replyToTextVal = m.reply_to_text;
-  const row=document.createElement('div'); row.style.display='flex'; row.style.gap='8px'; row.style.alignItems='flex-end'; row.style.maxWidth='78%'; row.style.alignSelf=isOwn?'flex-end':'flex-start'; if(isOwn) row.style.marginLeft='auto';
+  const row=document.createElement('div'); row.style.display='flex'; row.style.gap='8px'; row.style.alignItems='flex-end'; row.style.maxWidth='78%'; row.style.alignSelf=isOwn?'flex-end':'flex-start'; if(isOwn) row.style.marginLeft='auto'; row.dataset.id = messageId||'';
   let avatarEl; if(avatarUrl){ avatarEl=document.createElement('img'); avatarEl.src=avatarUrl; avatarEl.style.cssText='width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;'; } else { avatarEl=document.createElement('div'); avatarEl.textContent=(senderName||'?').charAt(0).toUpperCase(); avatarEl.style.cssText='width:32px;height:32px;border-radius:50%;background:#4a148c;color:white;display:flex;align-items:center;justify-content:center;font-weight:bold;flex-shrink:0;'; }
   const bubble=document.createElement('div'); bubble.style.cssText = `background:${isOwn? '#dcf8c6':'white'}; padding:8px 12px; border-radius:12px; box-shadow:0 1px 1px rgba(0,0,0,0.1); position:relative; max-width:100%;`; if(messageId) bubble.setAttribute('data-id',messageId);
   if(replyToNameVal){
-    const quote=document.createElement('div'); quote.style.cssText='border-left:3px solid #4a148c; background:rgba(0,0,0,0.05); padding:4px 8px; margin-bottom:6px; border-radius:4px;'; quote.innerHTML=`<div style="font-size:11px; font-weight:bold; color:#4a148c;">${replyToNameVal}</div><div style="font-size:11px; color:#555; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${replyToTextVal||''}</div>`; bubble.appendChild(quote);
+    const quote=document.createElement('div'); quote.style.cssText='border-left:3px solid #4a148c; background:rgba(0,0,0,0.06); padding:5px 8px; margin-bottom:6px; border-radius:4px;'; quote.innerHTML=`<div style="font-size:11px; font-weight:bold; color:#4a148c;">${replyToNameVal}</div><div style="font-size:11px; color:#555; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px;">${replyToTextVal||''}</div>`; bubble.appendChild(quote);
   }
   if(!isOwn && senderName){ const b=document.createElement('b'); b.textContent=senderName; b.style.cssText='font-size:12px;color:#075e54;display:block;margin-bottom:2px;'; bubble.appendChild(b); }
   if(text){ const s=document.createElement('div'); s.textContent=text; s.style.whiteSpace='pre-wrap'; s.style.wordBreak='break-word'; s.style.fontSize='14px'; bubble.appendChild(s); }
@@ -167,7 +180,7 @@ function appendMessageToFeed(m){
   }
   const meta=document.createElement('div'); meta.style.cssText='display:flex;justify-content:flex-end;gap:10px;margin-top:4px; align-items:center;';
   const timeSpan=document.createElement('span'); timeSpan.textContent=formatTime(createdAt||new Date()); timeSpan.style.fontSize='10px'; timeSpan.style.color='#888'; meta.appendChild(timeSpan);
-  const replyBtn=document.createElement('span'); replyBtn.textContent='↩️ Reply'; replyBtn.style.cssText='cursor:pointer; font-size:11px; color:#4a148c; font-weight:600;'; replyBtn.onclick=()=> setReply(messageId, senderName, text || 'File'); meta.appendChild(replyBtn);
+  const replyBtn=document.createElement('span'); replyBtn.textContent='Reply'; replyBtn.style.cssText='cursor:pointer; font-size:11px; color:#4a148c; font-weight:700; background:#f0eaff; padding:2px 6px; border-radius:10px;'; replyBtn.onclick=()=> setReply(messageId, senderName, text || 'File'); meta.appendChild(replyBtn);
   if(isOwn && messageId){ const del=document.createElement('span'); del.textContent='×'; del.style.cursor='pointer'; del.style.fontSize='14px'; del.style.color='#c00'; del.onclick=async()=>{ if(confirm("Delete?")) await supabaseClient.from('messages').delete().eq('id',messageId); }; meta.appendChild(del); }
   bubble.appendChild(meta);
   if(!isOwn){ row.appendChild(avatarEl); row.appendChild(bubble); } else { row.appendChild(bubble); row.appendChild(avatarEl); }
@@ -177,6 +190,7 @@ function appendMessageToFeed(m){
 async function sendMessage(){
   if(!currentUser){ usernameOverlay.classList.remove('hidden'); usernameOverlay.style.display='flex'; return; }
   await ensureAuth();
+  unlockAudio();
   let finalText = chatInput?.value.trim() || "";
   if(pendingFile){
     const file=pendingFile; const caption=finalText||file.name; sendBtn.textContent="..."; sendBtn.disabled=true;
@@ -184,14 +198,27 @@ async function sendMessage(){
       const fileName=`${currentRoom}/${currentUserId}_${Date.now()}_${file.name}`;
       const {error}=await supabaseClient.storage.from('chat-files').upload(fileName,file); if(error) throw error;
       const {data}=supabaseClient.storage.from('chat-files').getPublicUrl(fileName);
-      await supabaseClient.from('messages').insert([{ text:caption, room_id:currentRoom, file_url:data.publicUrl, file_type:file.type, sender_name:currentUser, avatar_url:currentAvatar, sender_id:currentUserId, reply_to_id: pendingReply?.id||null, reply_to_name: pendingReply?.name||null, reply_to_text: pendingReply?.text||null }]);
+      let payload = { text:caption, room_id:currentRoom, file_url:data.publicUrl, file_type:file.type, sender_name:currentUser, avatar_url:currentAvatar, sender_id:currentUserId, reply_to_id: pendingReply?.id||null, reply_to_name: pendingReply?.name||null, reply_to_text: pendingReply?.text||null };
+      let res = await supabaseClient.from('messages').insert([payload]);
+      if(res.error && res.error.message.includes('reply_to')){
+        delete payload.reply_to_id; delete payload.reply_to_name; delete payload.reply_to_text;
+        await supabaseClient.from('messages').insert([payload]);
+      }
       if(chatInput) chatInput.value=""; clearFilePreview(); clearReply();
     }catch(err){ alert(err.message); }
     sendBtn.textContent="Send"; sendBtn.disabled=false; return;
   }
   if(!finalText) return;
   if(chatInput) chatInput.value="";
-  await supabaseClient.from('messages').insert([{ text:finalText, room_id:currentRoom, sender_name:currentUser, avatar_url:currentAvatar, sender_id:currentUserId, reply_to_id: pendingReply?.id||null, reply_to_name: pendingReply?.name||null, reply_to_text: pendingReply?.text||null }]);
+  let payload = { text:finalText, room_id:currentRoom, sender_name:currentUser, avatar_url:currentAvatar, sender_id:currentUserId, reply_to_id: pendingReply?.id||null, reply_to_name: pendingReply?.name||null, reply_to_text: pendingReply?.text||null };
+  let { error } = await supabaseClient.from('messages').insert([payload]);
+  if(error && error.message.toLowerCase().includes('reply_to')){
+    delete payload.reply_to_id; delete payload.reply_to_name; delete payload.reply_to_text;
+    const retry = await supabaseClient.from('messages').insert([payload]);
+    if(retry.error) alert("DB needs reply columns: run SQL I gave you. Error: "+retry.error.message);
+  } else if(error){
+    alert(error.message);
+  }
   clearReply();
 }
 
@@ -220,8 +247,29 @@ async function confirmRoomPassword(){
   loadMessages(); connectToRealtimeStream();
 }
 
+// --- FIXED PART ONLY - ONLINE PRESENCE ---
+function updateOnlineUI(users){
+  const countEl = document.getElementById('online-number');
+  const countDrawer = document.getElementById('online-number-drawer');
+  const container = document.getElementById('online-users-container');
+  const containerDrawer = document.getElementById('online-users-container-drawer');
+  const count = users.length;
+  if(countEl) countEl.textContent = count + (count===1? " online" : " online");
+  if(countDrawer) countDrawer.textContent = count;
+  const html = users.map(u => `
+    <div style="display:flex; align-items:center; gap:8px; padding:6px 8px; background:#f9f5ff; border-radius:10px;">
+      <img src="${u.avatar||'https://via.placeholder.com/40/4a148c/fff?text='+encodeURIComponent(u.name.charAt(0))}" style="width:28px; height:28px; border-radius:50%; object-fit:cover;">
+      <div style="flex:1;"><div style="font-size:13px; font-weight:600;">${u.name}</div><div style="font-size:11px; color:#00c853;">● Online</div></div>
+    </div>
+  `).join('');
+  if(container) container.innerHTML = html || "<div style='padding:20px; text-align:center; color:#888; font-size:13px;'>No one online yet</div>";
+  if(containerDrawer) containerDrawer.innerHTML = html || "<div style='color:#bbb; font-size:12px;'>No one online</div>";
+}
+
 function connectToRealtimeStream(){
   if(realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
+  if(presenceChannel) supabaseClient.removeChannel(presenceChannel);
+
   realtimeChannel=supabaseClient.channel(`chat-${currentRoom}`)
 .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:`room_id=eq.${currentRoom}`},p=>{
     appendMessageToFeed(p.new);
@@ -230,16 +278,39 @@ function connectToRealtimeStream(){
       flashTitle();
     }
   })
-.on('postgres_changes',{event:'DELETE',schema:'public',table:'messages'},p=>{ const el=chatMessages?.querySelector(`[data-id="${p.old.id}"]`); if(el?.parentElement) el.parentElement.remove(); })
+.on('postgres_changes',{event:'DELETE',schema:'public',table:'messages'},p=>{
+    const el=chatMessages?.querySelector(`[data-id="${p.old.id}"]`);
+    if(el){ const row = el.closest('div[data-id]') || el.parentElement?.parentElement || el.parentElement; if(row) row.remove(); }
+  })
 .subscribe();
+
+  presenceChannel = supabaseClient.channel(`presence-${currentRoom}`, { config: { presence: { key: currentUserId } } });
+  presenceChannel.on('presence', { event: 'sync' }, () => {
+    const state = presenceChannel.presenceState();
+    const users = [];
+    for (const id in state) {
+      state[id].forEach(p => users.push(p));
+    }
+    updateOnlineUI(users);
+  });
+  presenceChannel.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') {
+      await presenceChannel.track({
+        id: currentUserId,
+        name: currentUser || 'Guest',
+        avatar: currentAvatar || null,
+        room: currentRoom
+      });
+    }
+  });
 }
 
 function updateChatHeader(){ const name=localStorage.getItem('fed_name')||currentUser||'Guest'; const room=currentRoom; if(currentRoomLabel) currentRoomLabel.textContent=`Room: ${room} | You: ${name}`; if(chatInput) chatInput.placeholder=`${name} • #${room} > Type...`; }
-function setupPresence(){}
 function joinGeneral(){
   currentRoom = "general";
   localStorage.setItem('last_room', 'general');
   if(document.getElementById('mobile-drawer')) document.getElementById('mobile-drawer').classList.remove('open');
+  const bd = document.getElementById('drawer-backdrop'); if(bd) bd.classList.remove('open');
   loadMessages(); connectToRealtimeStream();
 }
 
