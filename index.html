@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- FIX: Allow Google popup to work on localhost + Vercel -->
+  <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
+  <meta http-equiv="Cross-Origin-Embedder-Policy" content="unsafe-none">
   <title>Private Room Chat</title>
   <link rel="icon" type="image/png" href="image/mylove.png">
   <link rel="stylesheet" href="chat.css" />
@@ -71,7 +74,6 @@
   <button id="join-btn" type="button">Join</button>
   <span id="current-room-label">Room: general | You: Guest</span>
   
-  <!-- ONLINE COUNT BADGE - NEW -->
   <div id="online-count" title="Who's online">
     <span class="dot"></span>
     <span id="online-number">0 online</span>
@@ -80,7 +82,6 @@
   <button id="change-profile-btn" type="button" title="Profile">⚙️</button>
 </div>
 
-<!-- ONLINE POPUP - NEW -->
 <div id="online-popup">
   <div id="online-popup-header">
     <span>🟢 Online in this room</span>
@@ -91,13 +92,11 @@
   </div>
 </div>
 
-<!-- MOBILE MENU DRAWER -->
 <div id="mobile-drawer">
   <button id="drawer-close" type="button">✕</button>
   <div style="font-weight:bold; font-size:18px; margin-bottom:4px;">Private Room Chat</div>
   <div id="drawer-info" style="opacity:0.9; font-size:13px; margin-bottom:12px;">Room: general | You: Guest</div>
   
-  <!-- ONLINE LIST IN DRAWER - NEW -->
   <div id="online-list-drawer" style="margin:12px 0; background:rgba(0,0,0,0.25); border-radius:12px; padding:10px;">
     <div style="font-size:12px; font-weight:bold; opacity:0.9; margin-bottom:8px; display:flex; justify-content:space-between;">
       <span>🟢 Online Now</span>
@@ -145,12 +144,31 @@
     <div style="margin:12px 0; border-top:1px solid #eee; padding-top:12px;">
       <div id="g_id_onload"
            data-client_id="995545702819-e5lulcophiasgkuche8m72ggrng23a4r.apps.googleusercontent.com"
-           data-callback="handleGoogle">
+           data-callback="handleGoogle"
+           data-auto_prompt="false">
       </div>
-      <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="outline" data-text="signin_with" data-size="large" data-width="100%"></div>
+      <!-- FIXED: data-width must be a NUMBER, not 100% -->
+      <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="outline" data-text="signin_with" data-size="large" data-width="320"></div>
     </div>
     <button id="username-btn" type="button" style="width:100%; margin-top:12px; background:#4a148c; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold;">Save & Enter Chat</button>
     <button id="closeProfileBtn" type="button" style="width:100%; margin-top:8px; background:#eee; color:#333; border:none; padding:10px; border-radius:10px; display:none;">Cancel</button>
+  </div>
+</div>
+
+<!-- ROOM PASSWORD OVERLAY (was missing in your file) -->
+<div id="room-pass-overlay" class="password-overlay hidden" style="position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:9999;">
+  <div class="password-box" style="background:white; padding:20px; border-radius:16px; width:92%; max-width:340px;">
+    <h3 id="room-pass-title">Enter Password</h3>
+    <p id="room-pass-desc" style="font-size:13px; color:#666;"></p>
+    <div style="position:relative; margin:10px 0;">
+      <input type="password" id="room-pass-input" placeholder="Room password" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; box-sizing:border-box;">
+      <span id="toggle-pass" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer;">👁️</span>
+    </div>
+    <p id="room-pass-error" style="color:red; font-size:12px; min-height:16px;"></p>
+    <div style="display:flex; gap:8px; margin-top:10px;">
+      <button id="room-pass-close" type="button" style="flex:1; background:#eee; border:none; padding:10px; border-radius:10px; cursor:pointer;">Cancel</button>
+      <button id="room-pass-btn" type="button" style="flex:1; background:#4a148c; color:white; border:none; padding:10px; border-radius:10px; cursor:pointer; font-weight:bold;">Join Room</button>
+    </div>
   </div>
 </div>
 
@@ -167,7 +185,6 @@ const onlinePopupClose = document.getElementById('online-popup-close');
 menuToggle.addEventListener('click', ()=> drawer.classList.add('open'));
 drawerClose.addEventListener('click', ()=> drawer.classList.remove('open'));
 
-// Click online badge to show popup
 onlineCountBtn.addEventListener('click', ()=>{
   onlinePopup.classList.toggle('open');
 });
@@ -190,11 +207,11 @@ document.getElementById('drawer-profile').addEventListener('click', ()=>{
   drawer.classList.remove('open');
 });
 setInterval(()=>{
-  const label = document.getElementById('current-room-label').innerText;
-  document.getElementById('drawer-info').innerText = label;
+  const label = document.getElementById('current-room-label')?.innerText || '';
+  const drawerInfo = document.getElementById('drawer-info');
+  if(drawerInfo) drawerInfo.innerText = label;
 }, 500);
 
-// Close popup when clicking outside
 document.addEventListener('click', (e)=>{
   if(!onlinePopup.contains(e.target) && !onlineCountBtn.contains(e.target)){
     onlinePopup.classList.remove('open');
