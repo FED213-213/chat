@@ -2,6 +2,18 @@ const SUPABASE_URL = "https://fmhfknlhyriiahywdcdc.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_665mBiTJNWgKdZ3hTZVH5w_5tidUFTO";
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// SOUNDS - SUPER LOUD - ONLY ONCE
+const messageSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-long-pop-2358.mp3');
+const ringtone = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-modern-technology-ring-2582.mp3');
+ringtone.loop = true; messageSound.volume = 1.0; ringtone.volume = 1.0;
+let audioContext;
+function boostVolume(audio, boost=3.5){ try{ if(!audioContext) audioContext=new (window.AudioContext||window.webkitAudioContext)(); if(audio._boosted) return; const s=audioContext.createMediaElementSource(audio); const g=audioContext.createGain(); g.gain.value=boost; s.connect(g); g.connect(audioContext.destination); audio._boosted=true; }catch(e){} }
+function playMessageChime(){ messageSound.currentTime=0; messageSound.play().catch(()=>{}); boostVolume(messageSound,3.5); if(audioContext&&audioContext.state==='suspended') audioContext.resume(); }
+function playRing(){ ringtone.currentTime=0; ringtone.play().catch(()=>{}); boostVolume(ringtone,2.5); if(audioContext&&audioContext.state==='suspended') audioContext.resume(); }
+function stopRing(){ ringtone.pause(); ringtone.currentTime=0; }
+function requestNotificationPermission(){ if('Notification' in window && Notification.permission==='default') Notification.requestPermission(); }
+function showPushNotification(name,text){ if(document.hidden && 'Notification' in window && Notification.permission==='granted'){ new Notification(name,{body:text||'New message',icon:targetAvatar||''}); } }
+
 let currentUser = localStorage.getItem('fed_name');
 let currentAvatar = localStorage.getItem('chat_avatar');
 let currentUserId = null;
@@ -23,6 +35,21 @@ if(targetAvatar){
   let ph=`https://via.placeholder.com/40/4a148c/fff?text=${encodeURIComponent(targetName.charAt(0))}`;
   document.getElementById('target-avatar').src = ph;
   document.getElementById('incoming-avatar').src = ph;
+  // Make header pic work like message body pics
+const headerAvatar = document.getElementById('target-avatar');
+const headerName = document.getElementById('target-name');
+if(headerAvatar){
+  headerAvatar.style.cursor = 'pointer';
+  headerAvatar.onclick = () => {
+    showProfileInfo(decodeURIComponent(targetName), targetAvatar, targetId);
+  };
+}
+if(headerName){
+  headerName.style.cursor = 'pointer';
+  headerName.onclick = () => {
+    showProfileInfo(decodeURIComponent(targetName), targetAvatar, targetId);
+  };
+}
 }
 
 async function ensureAuth(){
@@ -177,7 +204,17 @@ async function sendMessage(){
 
 function connectRealtime(){
   if(realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
-  realtimeChannel=supabaseClient.channel(`private-${roomId}`).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:`room_id=eq.${roomId}`},p=>appendMessage(p.new)).subscribe();
+  realtimeChannel=supabaseClient.channel(`private-${roomId}`)
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:`room_id=eq.${roomId}`},p=>{
+    const isOwn = p.new.sender_id === currentUserId;
+    appendMessage(p.new);
+    if(!isOwn){
+      playMessageChime();
+      // vibrate on phone
+      if(navigator.vibrate) navigator.vibrate([100,50,100]);
+      showPushNotification(p.new.sender_name, p.new.text || '🎤 Voice note / 📎 File');
+    }
+  }).subscribe();
 }
 
 // ===== VOICE NOTE RECORDING =====
@@ -376,4 +413,100 @@ document.getElementById('attach-btn').onclick=()=>document.getElementById('file-
 document.getElementById('file-input').addEventListener('change',e=>{ pendingFile=e.target.files[0]; });
 
 ensureAuth();
+// ===== RECENT PRIVATE CHATS LIST =====
+// ===== RECENT PRIVATE CHATS LIST - FIXED NO AVATAR COLUMN =====
+async function loadRecentChats(){
+  const listEl = document.getElementById('recent-chats-list');
+  if(!listEl) return;
+  listEl.innerHTML = '<p style="padding:20px;text-align:center;color:#888">Loading...</p>';
+
+  try{
+    // FIX: don't select sender_avatar - it doesn't exist
+    const { data, error } = await supabaseClient
+      .from('messages')
+      .select('room_id, sender_id, sender_name, created_at')
+      .or(`sender_id.eq.${currentUserId},room_id.ilike.%${currentUserId}%`)
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if(error) throw error;
+
+    const seen = new Map();
+    data.forEach(m => {
+      let otherId = null;
+      if(m.room_id && m.room_id.startsWith('dm_')){
+        const parts = m.room_id.replace('dm_','').split('_');
+        // your room format is dm_c1358e4b-... so split by _ and find other
+        otherId = parts.find(p => p !== currentUserId && p.length > 5) || m.sender_id;
+        // better: get from room string
+        const cleanRoom = m.room_id.replace('dm_','');
+        const ids = cleanRoom.split('_');
+        if(ids.length >= 2){
+          otherId = ids[0] === currentUserId ? ids[1] : ids[0];
+        }
+      } else {
+        otherId = m.sender_id;
+      }
+      if(!otherId || otherId === currentUserId) return;
+      if(!seen.has(otherId)){
+        seen.set(otherId, {
+          id: otherId,
+          name: m.sender_id === currentUserId ? null : m.sender_name,
+          lastTime: m.created_at,
+          roomId: m.room_id
+        });
+      }
+      // Update name if we find it
+      if(m.sender_id === otherId && m.sender_name){
+        seen.get(otherId).name = m.sender_name;
+      }
+    });
+
+    if(seen.size === 0){
+      listEl.innerHTML = '<p style="padding:20px;text-align:center;color:#888">No private chats yet</p>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    seen.forEach(user => {
+      const displayName = user.name || 'User ' + user.id.slice(0,5);
+      const item = document.createElement('div');
+      item.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;';
+      item.onmouseover = () => item.style.background = '#f0f0f0';
+      item.onmouseout = () => item.style.background = 'transparent';
+      item.innerHTML = `
+        <div style="width:40px;height:40px;border-radius:50%;background:#4a148c;color:white;display:flex;align-items:center;justify-content:center;font-weight:bold">${displayName.charAt(0).toUpperCase()}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${displayName}</div>
+          <div style="font-size:12px;color:#888">${new Date(user.lastTime).toLocaleString()}</div>
+        </div>
+      `;
+      item.onclick = () => {
+        const url = new URL(window.location.href);
+        url.searchParams.set('to', user.id);
+        url.searchParams.set('name', displayName);
+        url.searchParams.set('room', user.roomId);
+        window.location.href = url.toString();
+      };
+      listEl.appendChild(item);
+    });
+
+  }catch(e){
+    console.error(e);
+    listEl.innerHTML = `<p style="color:red;padding:10px;font-size:13px">Error: ${e.message}</p>`;
+  }
+}
+// Toggle sidebar
+document.getElementById('recent-chats-toggle')?.addEventListener('click', ()=>{
+  const sb = document.getElementById('recent-chats-sidebar');
+  sb.style.display = sb.style.display === 'none' ? 'block' : 'none';
+  if(sb.style.display === 'block') loadRecentChats();
+});
+document.getElementById('recent-chats-close')?.addEventListener('click', ()=>{
+  document.getElementById('recent-chats-sidebar').style.display = 'none';
+});
+
+// Call it on load
+setTimeout(loadRecentChats, 1500);
 setupVoiceNote();
+requestNotificationPermission();
