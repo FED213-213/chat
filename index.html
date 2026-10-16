@@ -117,6 +117,8 @@
   <div style="display:flex; gap:8px; margin:8px 0;">
     <button id="drawer-general" type="button" style="background:white; color:#4a148c; flex:1; padding:12px; border-radius:12px; border:none; font-weight:700;"># General</button>
     <button id="drawer-profile" type="button" style="background:rgba(255,255,255,0.15); color:white; padding:12px 16px; border-radius:12px; border:none;">⚙️ Profile</button>
+
+    
   </div>
   <div style="display:flex; gap:8px; margin:12px 0;">
     <input type="text" id="drawer-room-input" placeholder="Enter room name (e.g. 2k26)" autocomplete="off" style="flex:1; padding:12px; border-radius:12px; border:none; font-size:15px;">
@@ -151,13 +153,19 @@
 <audio id="chime-audio" src="https://assets.mixkit.co/sfx/preview/mixkit-message-pop-alert-2354.mp3" preload="auto"></audio>
 <!-- USER PROFILE POPUP -->
 <div id="user-profile-popup" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:99999; align-items:center; justify-content:center;">
-  <div style="background:white; border-radius:20px; padding:20px; width:90%; max-width:320px; text-align:center; position:relative;">
+  <div style="background:white; border-radius:20px; padding:20px; width:90%; max-width:340px; text-align:center; position:relative;">
     <button id="user-profile-close" style="position:absolute; top:10px; right:12px; background:#eee; border:none; width:32px; height:32px; border-radius:50%; cursor:pointer;">✕</button>
-    <img id="up-avatar" src="" style="width:80px; height:80px; border-radius:50%; object-fit:cover; margin:10px auto; display:block; background:#eee;">
-    <h3 id="up-name" style="margin:8px 0 4px; font-size:18px;">Name</h3>
+    <img id="up-avatar" src="" style="width:90px; height:90px; border-radius:50%; object-fit:cover; margin:10px auto; display:block; background:#eee; border:3px solid #4a148c;">
+    <h3 id="up-name" style="margin:8px 0 4px; font-size:20px;">Name</h3>
     <p id="up-gender" style="margin:0; color:#888; font-size:13px;"></p>
     <p id="up-status" style="margin:12px 0; background:#f5f0ff; padding:8px; border-radius:10px; font-size:12px; color:#4a148c;">● Online in this room</p>
-    <button id="up-reply-btn" style="background:#4a148c; color:white; border:none; padding:10px 20px; border-radius:20px; width:100%; cursor:pointer; font-weight:bold;">Reply to this person</button>
+    <div style="background:#fafafa; padding:10px; border-radius:12px; margin:10px 0; text-align:left;">
+      <div style="font-size:11px; color:#888; font-weight:bold; margin-bottom:4px;">BASIC INFO</div>
+      <div id="up-basic" style="font-size:13px; color:#333;">Community member<br>Private chat needs permission</div>
+    </div>
+    <button id="up-message-btn" style="background:#4a148c; color:white; border:none; padding:12px 20px; border-radius:20px; width:100%; cursor:pointer; font-weight:bold; margin-bottom:8px; font-size:15px;">💬 Message this person</button>
+    <button id="up-private-btn" style="background:white; color:#4a148c; border:1px solid #4a148c; padding:10px 20px; border-radius:20px; width:100%; cursor:pointer; font-weight:bold; margin-bottom:8px; display:none;">🔒 Request Private Chat</button>
+    <div style="font-size:10px; color:#aaa; margin-top:8px;">You will go to a private chat page</div>
   </div>
 </div>
 <script src="chat.js"></script>
