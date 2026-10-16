@@ -180,3 +180,6 @@ body {
   transform: scale(1.02);
   box-shadow: 0 4px 12px rgba(74,20,140,0.3);
 }
+.hello{
+  background-color: white;
+}
