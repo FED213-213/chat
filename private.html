@@ -4,26 +4,31 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Private Chat</title>
+<link rel="icon" type="image/png" href="image/mylove.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:system-ui,sans-serif;background:#efe7dd;display:flex;flex-direction:column;height:100vh}
 .header{height:60px;background:#4a148c;color:white;display:flex;align-items:center;padding:0 12px;gap:10px}
-.header img{width:40px;height:40px;border-radius:50%;object-fit:cover;background:white}
-.info{flex:1}
-.name{font-weight:bold;font-size:15px}
-.status{font-size:11px;opacity:0.8}
+.header img{width:40px;height:40px;border-radius:50%;object-fit:cover;background:white;cursor:pointer}
+.info{flex:1;min-width:0}
+.name{font-weight:bold;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status{font-size:11px;opacity:0.9}
 .back{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;color:white;cursor:pointer;font-size:18px}
 .call-btn{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;color:white;cursor:pointer;font-size:16px}
 #chat-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:#e5ddd5}
 .bottom-bar{position:relative;background:#f0f0f0;padding:8px 10px;display:flex;align-items:center;gap:8px}
-#chat-input{flex:1;border:none;padding:10px 14px;border-radius:20px;outline:none;font-size:15px}
-#send-btn,#attach-btn,#mic-btn{width:40px;height:40px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px}
+#chat-input{flex:1;border:none;padding:10px 14px;border-radius:20px;outline:none;font-size:15px;min-width:0}
+#send-btn,#attach-btn,#voice-btn{width:40px;height:40px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
 #send-btn{background:#4a148c;color:white}
-#attach-btn,#mic-btn{background:white}
+#attach-btn,#voice-btn{background:white;transition:all 0.2s}
+#voice-btn.recording{background:#ff1744;color:white;animation:pulse 1s infinite}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
 .hidden{display:none!important}
-
-/* CALL OVERLAY */
+#file-name-preview{font-size:12px;color:#4a148c;padding:0 10px}
+.menu-item:hover{background:#f0f0f0!important}
+.chat-row{animation:fadeIn 0.2s}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 #call-overlay{display:none;position:fixed;inset:0;background:#111;z-index:999999;flex-direction:column;}
 #remote-video{flex:1;width:100%;object-fit:cover;background:#000}
 #local-video{position:absolute;bottom:100px;right:20px;width:120px;height:160px;border-radius:12px;object-fit:cover;border:2px solid white;background:#222;z-index:2}
@@ -44,7 +49,7 @@ body{font-family:system-ui,sans-serif;background:#efe7dd;display:flex;flex-direc
   <img id="target-avatar" src="">
   <div class="info">
     <div class="name" id="target-name">Loading...</div>
-    <div class="status" id="target-status">Private chat • Encrypted</div>
+    <div class="status" id="target-status">○ Connecting...</div>
   </div>
   <button class="call-btn" id="voice-call-btn" title="Voice call">📞</button>
   <button class="call-btn" id="video-call-btn" title="Video call">🎥</button>
@@ -53,8 +58,10 @@ body{font-family:system-ui,sans-serif;background:#efe7dd;display:flex;flex-direc
 
 <div id="chat-messages"></div>
 
+<div id="file-name-preview" class="hidden">📎 <span id="file-name-text"></span> <button onclick="clearFile()" style="border:none;background:none;cursor:pointer">✕</button></div>
+
 <div id="reply-preview" class="hidden" style="background:white;border-top:1px solid #ddd;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
-  <div><div id="reply-to-name" style="font-size:12px;color:#4a148c;font-weight:bold"></div><div id="reply-to-text" style="font-size:12px;color:#666"></div></div>
+  <div style="min-width:0"><div id="reply-to-name" style="font-size:12px;color:#4a148c;font-weight:bold"></div><div id="reply-to-text" style="font-size:12px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div></div>
   <button id="reply-cancel" style="border:none;background:#eee;width:28px;height:28px;border-radius:50%;cursor:pointer;">✕</button>
 </div>
 
@@ -62,11 +69,16 @@ body{font-family:system-ui,sans-serif;background:#efe7dd;display:flex;flex-direc
   <button id="attach-btn">📎</button>
   <input type="file" id="file-input" hidden>
   <input type="text" id="chat-input" placeholder="Type a private message...">
-  <button id="mic-btn">🎤</button>
+  <div id="recording-ui" class="hidden" style="flex:1;display:flex;align-items:center;gap:8px;background:white;padding:10px 14px;border-radius:20px;">
+    <span style="width:8px;height:8px;background:red;border-radius:50%;display:inline-block;animation:pulse 1s infinite"></span>
+    <span id="rec-timer" style="font-size:14px;color:#ff1744;font-weight:bold">● 0:00</span>
+    <span style="font-size:12px;color:#888">Recording...</span>
+    <button id="cancel-rec" style="margin-left:auto;border:none;background:#eee;width:24px;height:24px;border-radius:50%;cursor:pointer">✕</button>
+  </div>
+  <button id="voice-btn" title="Tap to record">🎤</button>
   <button id="send-btn">➤</button>
 </div>
 
-<!-- CALL OVERLAY -->
 <div id="call-overlay">
   <div class="call-status"><h3 id="call-status-text">Calling...</h3><p id="call-status-sub">Private call with <span id="call-with-name"></span></p></div>
   <video id="remote-video" autoplay playsinline></video>
@@ -78,7 +90,6 @@ body{font-family:system-ui,sans-serif;background:#efe7dd;display:flex;flex-direc
   </div>
 </div>
 
-<!-- INCOMING CALL -->
 <div id="incoming-call">
   <img id="incoming-avatar" src="" style="width:60px;height:60px;border-radius:50%;margin-bottom:8px;">
   <h3 id="incoming-name" style="margin:4px 0">Incoming call...</h3>
