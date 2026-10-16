@@ -418,3 +418,119 @@ function makeProfileClickable(el, senderId, senderName, avatarUrl){
   el.style.cursor = 'pointer';
   el.addEventListener('click', ()=> showUserProfile(senderId, senderName, avatarUrl));
 }
+// --- VOICE NOTE FIX ---
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+let recordingStartTime = null;
+let recordingTimer = null;
+
+const micBtn = document.getElementById('mic-btn');
+
+function formatRecordingTime(ms){
+  const s = Math.floor(ms/1000);
+  const m = Math.floor(s/60);
+  const sec = s%60;
+  return `${m}:${sec.toString().padStart(2,'0')}`;
+}
+
+async function startRecording(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+    audioChunks = [];
+    recordingStartTime = Date.now();
+
+    mediaRecorder.ondataavailable = e => { if(e.data.size>0) audioChunks.push(e.data); };
+
+    mediaRecorder.onstop = async ()=>{
+      clearInterval(recordingTimer);
+      stream.getTracks().forEach(t=>t.stop());
+      if(audioChunks.length===0) return;
+
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      if(audioBlob.size < 1000){ alert("Too short"); resetMic(); return; }
+
+      micBtn.textContent = "⏳";
+      micBtn.disabled = true;
+
+      try{
+        await ensureAuth();
+        const fileName = `${currentRoom}/${currentUserId}_${Date.now()}_voice.webm`;
+        const {error} = await supabaseClient.storage.from('chat-files').upload(fileName, audioBlob, { contentType: 'audio/webm' });
+        if(error) throw error;
+
+        const {data} = supabaseClient.storage.from('chat-files').getPublicUrl(fileName);
+
+        let payload = {
+          text: `🎤 Voice note (${formatRecordingTime(Date.now()-recordingStartTime)})`,
+          file_url: data.publicUrl,
+          file_type: 'audio/webm',
+          room_id: currentRoom,
+          sender_name: currentUser,
+          avatar_url: currentAvatar,
+          sender_id: currentUserId,
+          reply_to_id: pendingReply?.id||null,
+          reply_to_name: pendingReply?.name||null,
+          reply_to_text: pendingReply?.text||null
+        };
+
+        const {error: insErr} = await supabaseClient.from('messages').insert([payload]);
+        if(insErr) throw insErr;
+        clearReply();
+      }catch(err){
+        alert("Voice upload failed: "+err.message);
+      }
+      resetMic();
+    };
+
+    mediaRecorder.start();
+    isRecording = true;
+    micBtn.textContent = "🔴";
+    micBtn.style.background = "#ff1744";
+    micBtn.style.color = "white";
+
+    recordingTimer = setInterval(()=>{
+      if(chatInput) chatInput.placeholder = `🔴 Recording ${formatRecordingTime(Date.now()-recordingStartTime)}... tap mic to stop`;
+    }, 500);
+
+  }catch(err){
+    alert("Mic permission denied. Allow microphone in browser settings.");
+    resetMic();
+  }
+}
+
+function stopRecording(){
+  if(mediaRecorder && mediaRecorder.state==='recording'){
+    mediaRecorder.stop();
+  }
+}
+
+function resetMic(){
+  isRecording = false;
+  if(micBtn){
+    micBtn.textContent = "🎤";
+    micBtn.style.background = "";
+    micBtn.style.color = "";
+    micBtn.disabled = false;
+  }
+  if(chatInput) {
+    const name = localStorage.getItem('fed_name')||currentUser||'Guest';
+    chatInput.placeholder = `${name} • #${currentRoom} > Type...`;
+  }
+  clearInterval(recordingTimer);
+}
+
+if(micBtn){
+  micBtn.onclick = ()=>{
+    unlockAudio();
+    if(!isRecording){
+      startRecording();
+    } else {
+      stopRecording();
+    }
+  };
+
+  // Long press for mobile - optional
+  micBtn.addEventListener('contextmenu', e=> e.preventDefault());
+}
