@@ -180,3 +180,9 @@ body {
   transform: scale(1.02);
   box-shadow: 0 4px 12px rgba(74,20,140,0.3);
 }
+#notif-drawer.open { display:flex !important; animation: slideIn 0.3s ease; }
+#notif-backdrop.open { display:block !important; }
+@keyframes slideIn { from{transform:translateX(100%)} to{transform:translateX(0)} }
+.notif-item { display:flex; gap:10px; padding:10px; border-radius:12px; cursor:pointer; margin-bottom:8px; background:#fafafa; border:1px solid #f0f0f0; }
+.notif-item.unread { background:#f5f0ff; border-color:#d1c4e9; }
+.notif-item:hover { background:#eee; }

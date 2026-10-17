@@ -14,17 +14,30 @@ function stopRing(){ ringtone.pause(); ringtone.currentTime=0; }
 function requestNotificationPermission(){ if('Notification' in window && Notification.permission==='default') Notification.requestPermission(); }
 function showPushNotification(name,text){ if(document.hidden && 'Notification' in window && Notification.permission==='granted'){ new Notification(name,{body:text||'New message',icon:targetAvatar||''}); } }
 
+
 let currentUser = localStorage.getItem('fed_name');
 let currentAvatar = localStorage.getItem('chat_avatar');
 let currentUserId = null;
-let targetId = new URLSearchParams(window.location.search).get('to') || localStorage.getItem('dm_target_id');
-let targetName = new URLSearchParams(window.location.search).get('name') || localStorage.getItem('dm_target_name') || 'User';
+
+// Support both the new /chat/username URLs and existing query URLs.
+const urlParams = new URLSearchParams(window.location.search);
+const pathParts = window.location.pathname.split('/').filter(Boolean);
+const isShortChatUrl = pathParts[0] === 'chat';
+
+let targetId = urlParams.get('to') || localStorage.getItem('dm_target_id');
+let targetName = urlParams.get('name') || localStorage.getItem('dm_target_name') || 'User';
 let targetAvatar = localStorage.getItem('dm_target_avatar') || '';
-let roomId = new URLSearchParams(window.location.search).get('room');
+let roomId = urlParams.get('room');
+
+const requestedUsername = isShortChatUrl && pathParts[1]
+  ? decodeURIComponent(pathParts[1])
+  : null;
+
 let pendingReply = null, pendingFile = null, realtimeChannel = null;
 let callChannel = null, presenceChannel = null, pc = null, localStream = null;
 let callType = 'video';
 let mediaRecorder = null, audioChunks = [], isRecording = false;
+
 
 document.getElementById('target-name').textContent = decodeURIComponent(targetName);
 document.getElementById('call-with-name').textContent = decodeURIComponent(targetName);
@@ -52,13 +65,105 @@ if(headerName){
 }
 }
 
-async function ensureAuth(){
-  let {data:{session}} = await supabaseClient.auth.getSession();
-  if(!session){ const {data}= await supabaseClient.auth.signInAnonymously(); session=data.session; }
+
+async function ensureAuth() {
+  const { data: sessionData, error: sessionError } =
+    await supabaseClient.auth.getSession();
+
+  if (sessionError) {
+    console.error('Session error:', sessionError);
+    return;
+  }
+
+  let session = sessionData.session;
+
+  if (!session) {
+    const { data, error } =
+      await supabaseClient.auth.signInAnonymously();
+
+    if (error || !data.session) {
+      console.error('Authentication failed:', error);
+      alert('Could not sign in. Please refresh and try again.');
+      return;
+    }
+
+    session = data.session;
+  }
+
   currentUserId = session.user.id;
-  if(!roomId){ const ids=[currentUserId,targetId].sort(); roomId=`dm_${ids[0]}_${ids[1]}`.substring(0,60); }
-  loadPrivateMessages(); connectRealtime(); connectCallAndPresence(); checkPermission();
+
+  // Resolve the username in /chat/username.
+  if (requestedUsername) {
+    const { data: profile, error } = await supabaseClient
+      .from('user_profiles')
+      .select('id, username, avatar_url')
+      .eq('username', requestedUsername)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Username lookup failed:', error);
+      alert('Could not find this user. Check your database permissions.');
+      return;
+    }
+
+    if (!profile) {
+      alert('User not found.');
+      window.location.href = 'index.html';
+      return;
+    }
+
+    targetId = profile.id;
+    targetName = profile.username;
+    targetAvatar = profile.avatar_url || '';
+
+    if (targetId === currentUserId) {
+      alert('You cannot open a private chat with yourself.');
+      window.location.href = 'index.html';
+      return;
+    }
+
+    // Keep the correct recipient available to existing code.
+    localStorage.setItem('dm_target_id', targetId);
+    localStorage.setItem('dm_target_name', targetName);
+    localStorage.setItem('dm_target_avatar', targetAvatar);
+  }
+
+  if (!targetId) {
+    alert('No chat recipient was specified.');
+    window.location.href = 'index.html';
+    return;
+  }
+
+  // Existing room convention: both users must generate the same room ID.
+  if (!roomId) {
+    const ids = [currentUserId, targetId].sort();
+    roomId = `dm_${ids[0]}_${ids[1]}`.substring(0, 60);
+  }
+
+  // Update the chat header after resolving the recipient.
+  const nameEl = document.getElementById('target-name');
+  const callNameEl = document.getElementById('call-with-name');
+
+  if (nameEl) nameEl.textContent = targetName;
+  if (callNameEl) callNameEl.textContent = targetName;
+
+  const avatarFallback =
+    `https://via.placeholder.com/40/4a148c/fff?text=${
+      encodeURIComponent(targetName.charAt(0) || 'U')
+    }`;
+
+  const avatarEl = document.getElementById('target-avatar');
+  const incomingAvatarEl = document.getElementById('incoming-avatar');
+
+  if (avatarEl) avatarEl.src = targetAvatar || avatarFallback;
+  if (incomingAvatarEl) incomingAvatarEl.src = targetAvatar || avatarFallback;
+
+  loadPrivateMessages();
+  connectRealtime();
+  connectCallAndPresence();
+  checkPermission();
 }
+
 function goBack(){ window.location.href='index.html'; }
 function formatTime(d){ const date=new Date(d); return date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
 
@@ -505,8 +610,124 @@ document.getElementById('recent-chats-toggle')?.addEventListener('click', ()=>{
 document.getElementById('recent-chats-close')?.addEventListener('click', ()=>{
   document.getElementById('recent-chats-sidebar').style.display = 'none';
 });
+// ===== NOTIFICATION SYSTEM FOR PRIVATE.HTML - FIXED =====
+let notifLastSeen = localStorage.getItem('notif_last_seen') || new Date(Date.now() - 86400000).toISOString();
 
-// Call it on load
+function toggleNotifDrawer(){
+  const drawer = document.getElementById('notif-drawer');
+  const backdrop = document.getElementById('notif-backdrop');
+  if(!drawer || !backdrop) return;
+  const isOpen = drawer.classList.contains('open');
+  if(isOpen){
+    drawer.classList.remove('open'); backdrop.classList.remove('open');
+    setTimeout(()=>{ drawer.style.display='none'; backdrop.style.display='none'; }, 200);
+  } else {
+    drawer.style.display='flex'; backdrop.style.display='block';
+    setTimeout(()=>{ drawer.classList.add('open'); backdrop.classList.add('open'); }, 10);
+    loadNotifications();
+  }
+}
+
+async function loadNotifications(){
+  const list = document.getElementById('notif-list');
+  if(!list) return;
+  await ensureAuth();
+  list.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">Loading...</div>';
+
+  let items = [];
+
+  // 1. Private requests
+  try{
+    const { data: requests } = await supabaseClient.from('private_requests')
+      .select('*')
+      .or(`to_id.eq.${currentUserId},from_id.eq.${currentUserId}`)
+      .order('created_at', {ascending:false})
+      .limit(15);
+
+    (requests||[]).forEach(r=>{
+      const isToMe = r.to_id === currentUserId;
+      const isUnread = new Date(r.created_at) > new Date(notifLastSeen) && isToMe && r.status==='pending';
+      items.push({
+        time: r.created_at,
+        unread: isUnread,
+        html: `<div class="notif-item ${isUnread?'unread':''}" onclick="handleNotifClick('request','${r.from_id}','${r.from_name}')">
+          <img src="${r.from_avatar||'https://via.placeholder.com/40/4a148c/fff?text='+r.from_name.charAt(0)}" style="width:40px; height:40px; border-radius:50%; background:#eee;">
+          <div style="flex:1"><div style="font-size:13px;"><b>${isToMe ? r.from_name : r.to_name}</b> ${isToMe && r.status==='pending' ? 'sent you a private request' : r.status}</div><div style="font-size:11px; color:#888;">${formatTime(r.created_at)}</div></div><span>${isToMe?'🔒':'↗️'}</span></div>`
+      });
+    });
+  }catch(e){ console.log('requests error', e); }
+
+  // 2. Missed DMs (any dm_ room that is not current room)
+  try{
+    const { data: missedMsgs } = await supabaseClient.from('messages')
+      .select('*')
+      .ilike('room_id','dm_%')
+      .gt('created_at', notifLastSeen)
+      .neq('sender_id', currentUserId)
+      .order('created_at', {ascending:false})
+      .limit(15);
+
+    (missedMsgs||[]).forEach(m=>{
+      if(m.room_id === roomId) return; // don't show current chat
+      items.push({
+        time: m.created_at,
+        unread: true,
+        html: `<div class="notif-item unread" onclick="handleNotifClick('dm','${m.sender_id}','${m.sender_name}','${m.room_id}')">
+          <img src="${m.avatar_url||''}" style="width:40px; height:40px; border-radius:50%; background:#eee;">
+          <div style="flex:1"><div style="font-size:13px;"><b>${m.sender_name}</b> sent you a DM</div><div style="font-size:12px; color:#555; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px;">${m.text||'📎 File'}</div><div style="font-size:11px; color:#888;">${formatTime(m.created_at)}</div></div></div>`
+      });
+    });
+  }catch(e){ console.log('msgs error', e); }
+
+  items.sort((a,b)=> new Date(b.time) - new Date(a.time));
+  const unreadCount = items.filter(i=>i.unread).length;
+  const badge = document.getElementById('notif-badge');
+  if(badge){
+    if(unreadCount>0){ badge.textContent = unreadCount>9 ? '9+' : unreadCount; badge.style.display='block'; }
+    else { badge.style.display='none'; }
+  }
+
+  if(items.length===0){
+    list.innerHTML = `<div style="text-align:center; padding:40px 20px; color:#999;"><div style="font-size:40px;">🔔</div><div style="margin-top:10px;">No new notifications</div><div style="font-size:12px; margin-top:4px;">You're all caught up!</div></div>`;
+  } else {
+    list.innerHTML = items.map(i=>i.html).join('');
+  }
+}
+
+function handleNotifClick(type, id, name, room){
+  toggleNotifDrawer();
+  if(type==='dm' && id){
+    const url = new URL(window.location.href);
+    url.searchParams.set('to', id);
+    url.searchParams.set('name', name);
+    url.searchParams.set('room', room);
+    window.location.href = url.toString();
+  }
+  if(type==='request' && id){
+    // open chat with that person
+    const ids=[currentUserId, id].sort();
+    const dmRoom=`dm_${ids[0]}_${ids[1]}`.substring(0,60);
+    const url = new URL(window.location.href);
+    url.searchParams.set('to', id);
+    url.searchParams.set('name', name);
+    url.searchParams.set('room', dmRoom);
+    window.location.href = url.toString();
+  }
+}
+
+document.getElementById('notif-bell')?.addEventListener('click', toggleNotifDrawer);
+document.getElementById('notif-close')?.addEventListener('click', toggleNotifDrawer);
+document.getElementById('notif-backdrop')?.addEventListener('click', toggleNotifDrawer);
+document.getElementById('notif-mark-read')?.addEventListener('click', ()=>{
+  notifLastSeen = new Date().toISOString();
+  localStorage.setItem('notif_last_seen', notifLastSeen);
+  const badge=document.getElementById('notif-badge');
+  if(badge) badge.style.display='none';
+  loadNotifications();
+});
+
+setInterval(async ()=>{ if(document.hidden) await loadNotifications(); }, 30000);
+window.addEventListener('load', ()=> setTimeout(loadNotifications, 2000));
 setTimeout(loadRecentChats, 1500);
 setupVoiceNote();
 requestNotificationPermission();
