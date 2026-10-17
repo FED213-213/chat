@@ -12,6 +12,11 @@ const currentRoomLabel = document.getElementById('current-room-label');
 const roomPassOverlay = document.getElementById('room-pass-overlay');
 const roomPassInput = document.getElementById('room-pass-input');
 const roomPassBtn = document.getElementById('room-pass-btn');
+const stickerPanel = document.getElementById('sticker-panel');
+const stickerContent = document.getElementById('sticker-content');
+const gifSearch = document.getElementById('gif-search');
+const stickerBtn = document.getElementById('sticker-btn');
+const stickerBackdrop = document.getElementById('sticker-backdrop');
 const roomPassClose = document.getElementById('room-pass-close');
 const roomPassTitle = document.getElementById('room-pass-title');
 const roomPassDesc = document.getElementById('room-pass-desc');
@@ -204,25 +209,162 @@ async function confirmRoomPassword(){
   roomPassOverlay.classList.add('hidden'); roomPassBtn.textContent="Join Room"; roomPassBtn.disabled=false;
   loadMessages(); connectToRealtimeStream();
 }
+
+// ====== FACEBOOK GROUP INFO STYLE - SINGLE VERSION ======
 function updateOnlineUI(users){
-  const countEl = document.getElementById('online-number'); const countDrawer = document.getElementById('online-number-drawer'); const container = document.getElementById('online-users-container'); const containerDrawer = document.getElementById('online-users-container-drawer'); const count = users.length;
-  if(countEl) countEl.textContent = count + (count===1? " online" : " online"); if(countDrawer) countDrawer.textContent = count;
-  const html = users.map(u => `<div onclick="showUserProfile('${u.id}','${u.name.replace(/'/g,"\\'")}','${u.avatar||''}')" style="display:flex; align-items:center; gap:8px; padding:6px 8px; background:#f9f5ff; border-radius:10px; cursor:pointer;"><img src="${u.avatar||'https://via.placeholder.com/40/4a148c/fff?text='+encodeURIComponent(u.name.charAt(0))}" style="width:28px; height:28px; border-radius:50%; object-fit:cover;"><div style="flex:1;"><div style="font-size:13px; font-weight:600;">${u.name}</div><div style="font-size:11px; color:#00c853;">● Online</div></div></div>`).join('');
-  if(container) container.innerHTML = html || "<div style='padding:20px; text-align:center; color:#888; font-size:13px;'>No one online yet</div>"; if(containerDrawer) containerDrawer.innerHTML = html || "<div style='color:#bbb; font-size:12px;'>No one online</div>";
+  const count = users ? users.length : 0;
+  const countEl = document.getElementById('online-number');
+  const drawerCountEl = document.getElementById('online-number-drawer');
+  const container = document.getElementById('online-users-container');
+  const drawerContainer = document.getElementById('online-users-container-drawer');
+  const badge = document.getElementById('group-count-badge');
+  const popupTitle = document.getElementById('popup-title');
+
+  if(countEl) countEl.textContent = count + (count===1 ? " online" : " online");
+  if(drawerCountEl) drawerCountEl.textContent = count;
+  if(badge){ badge.textContent = count; badge.style.display = count>0 ? 'block':'none'; }
+  if(popupTitle) popupTitle.textContent = `Group info • ${count} member${count!==1?'s':''} in ${currentRoom}`;
+
+  if(count===0){
+    const empty = `<div style="padding:24px; text-align:center; color:#888; font-size:13px;">No members online</div>`;
+    if(container) container.innerHTML = empty;
+    if(drawerContainer) drawerContainer.innerHTML = empty;
+    return;
+  }
+
+  const html = users.map(u=>{
+    const safeName = (u.name||'Guest').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    const avatar = u.avatar || u.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name||'G')}&background=4a148c&color=fff`;
+    const gender = u.gender || u.g || 'member';
+    const id = u.id || u.user_id || '';
+    return `
+      <div onclick="showUserProfile('${id}','${safeName}','${avatar}','${gender}')"
+           style="display:flex; align-items:center; gap:12px; padding:12px; border-radius:12px; cursor:pointer; border-bottom:1px solid #f5f5f5;"
+           onmouseover="this.style.background='#f5f0ff'" onmouseout="this.style.background='transparent'">
+        <img src="${avatar}" style="width:42px; height:42px; border-radius:50%; object-fit:cover; flex-shrink:0;">
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:600; font-size:14px; color:#222; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${u.name}</div>
+          <div style="font-size:11px; color:#666;">Gender: ${gender} • Joined ${currentRoom}</div>
+        </div>
+        <div style="color:#4a148c; font-size:18px;">›</div>
+      </div>`;
+  }).join('');
+
+  if(container) container.innerHTML = html;
+  if(drawerContainer) drawerContainer.innerHTML = html;
 }
+
+// ====== POPUP LIKE YOUR SCREENSHOT - SINGLE VERSION ======
+let upCurrentId = null, upCurrentName = null, upCurrentAvatar = null;
+
+window.showUserProfile = async function(senderId, senderName, avatarUrl, genderFromPresence){
+  if(!senderId) return;
+  if(senderId === currentUserId){
+    // show own profile menu instead
+    toggleProfileMenu();
+    return;
+  }
+  upCurrentId = senderId; upCurrentName = senderName; upCurrentAvatar = avatarUrl;
+  const popup = document.getElementById('user-profile-popup');
+  const av = document.getElementById('up-avatar');
+  const nm = document.getElementById('up-name');
+  const gn = document.getElementById('up-gender');
+  const status = document.getElementById('up-status');
+  
+  if(av) av.src = avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(senderName)}&background=4a148c&color=fff`;
+  if(nm) nm.textContent = senderName;
+  if(gn) gn.textContent = genderFromPresence ? `Gender: ${genderFromPresence}` : "Loading...";
+  if(status) status.textContent = "● Online in this room";
+  if(popup) popup.style.display = 'flex';
+
+  // Try to get real profile from DB
+  try{
+    const {data} = await supabaseClient.from('user_profiles').select('username, avatar_url, gender').eq('id', senderId).maybeSingle();
+    if(data){
+      if(nm) nm.textContent = data.username || senderName;
+      if(av && data.avatar_url) { av.src = data.avatar_url; upCurrentAvatar = data.avatar_url; }
+      if(gn) gn.textContent = data.gender ? `Gender: ${data.gender}` : `Gender: ${genderFromPresence||'member'}`;
+    }
+  }catch(e){}
+}
+
+function messageThisPerson(){
+  if(!upCurrentId) return;
+  localStorage.setItem('dm_target_id', upCurrentId);
+  localStorage.setItem('dm_target_name', upCurrentName);
+  localStorage.setItem('dm_target_avatar', upCurrentAvatar || '');
+  const ids = [currentUserId, upCurrentId].sort();
+  const dmRoomFull = `dm_${ids[0]}_${ids[1]}`.substring(0,60);
+  document.getElementById('user-profile-popup').style.display='none';
+  const onlinePop = document.getElementById('online-popup');
+  if(onlinePop) onlinePop.style.display='none';
+  window.location.href = `private.html?to=${upCurrentId}&name=${encodeURIComponent(upCurrentName)}&room=${dmRoomFull}`;
+}
+
+window.toggleOnlinePopup = function(){
+  const pop = document.getElementById('online-popup');
+  if(!pop) return;
+  const isHidden = pop.style.display === 'none' || pop.style.display === '';
+  
+  if(isHidden){
+    pop.style.display = 'block';
+    document.body.style.overflow = 'hidden'; // prevent background scroll on mobile
+    // refresh list
+    if(presenceChannel){
+      const state = presenceChannel.presenceState();
+      const users = [];
+      for(const id in state){ state[id].forEach(p=> users.push(p)); }
+      updateOnlineUI(users);
+    }
+  } else {
+    pop.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+}
+
+// Close when tapping outside on mobile
+document.addEventListener('click', (e)=>{
+  const pop = document.getElementById('online-popup');
+  const groupBtn = document.getElementById('group-members-btn');
+  const onlineCount = document.getElementById('online-count');
+  if(!pop || pop.style.display !== 'block') return;
+  
+  const isInsidePopup = pop.contains(e.target);
+  const isIcon = groupBtn && (e.target === groupBtn || groupBtn.contains(e.target));
+  const isOnlineText = onlineCount && (e.target === onlineCount || onlineCount.contains(e.target));
+  
+  if(!isInsidePopup && !isIcon && !isOnlineText){
+    pop.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+});
+
 function connectToRealtimeStream(){
   if(realtimeChannel) supabaseClient.removeChannel(realtimeChannel); if(presenceChannel) supabaseClient.removeChannel(presenceChannel); if(privateRequestsChannel) supabaseClient.removeChannel(privateRequestsChannel);
   realtimeChannel=supabaseClient.channel(`chat-${currentRoom}`)
 .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:`room_id=eq.${currentRoom}`},p=>{ appendMessageToFeed(p.new); if(p.new.sender_id!== currentUserId){ playChime(); flashTitle(); showSiteNotification(p.new.sender_name, p.new.text?.substring(0,80)||'New file', p.new.avatar_url); } })
 .on('postgres_changes',{event:'DELETE',schema:'public',table:'messages'},p=>{ loadMessages(); })
 .on('postgres_changes',{event:'UPDATE',schema:'public',table:'messages',filter:`room_id=eq.${currentRoom}`},()=>{ loadMessages(); }).subscribe();
+  
   presenceChannel = supabaseClient.channel(`presence-${currentRoom}`, { config: { presence: { key: currentUserId } } });
   presenceChannel.on('presence', { event: 'sync' }, () => { const state = presenceChannel.presenceState(); const users = []; for (const id in state) { state[id].forEach(p => users.push(p)); } updateOnlineUI(users); });
-  presenceChannel.subscribe(async (status) => { if (status === 'SUBSCRIBED') { await presenceChannel.track({ id: currentUserId, name: currentUser || 'Guest', avatar: currentAvatar || null, room: currentRoom }); } });
+  presenceChannel.subscribe(async (status) => { 
+    if (status === 'SUBSCRIBED') { 
+      await presenceChannel.track({ 
+        id: currentUserId, 
+        name: currentUser || 'Guest', 
+        avatar: currentAvatar || null, 
+        gender: localStorage.getItem('fed_gender') || 'member',
+        room: currentRoom 
+      }); 
+    } 
+  });
+  
   privateRequestsChannel = supabaseClient.channel('private-requests-'+currentUserId);
   privateRequestsChannel.on('postgres_changes',{ event:'INSERT', schema:'public', table:'private_requests', filter:`to_id=eq.${currentUserId}` },p=>{ showPrivateRequestPopup(p.new); showSiteNotification("Private chat request", `${p.new.from_name} wants to chat privately`, p.new.from_avatar); playChime(); });
   privateRequestsChannel.subscribe();
 }
+
 function updateChatHeader(){ 
   const name=localStorage.getItem('fed_name')||currentUser||'Guest'; 
   const room=currentRoom; 
@@ -243,55 +385,96 @@ if(togglePass) togglePass.addEventListener('click',()=>{ roomPassInput.type=room
 if(avatarInput){ avatarInput.addEventListener('change', ()=>{ const f=avatarInput.files[0]; if(!f||!avatarPreview) return; avatarPreview.src = URL.createObjectURL(f); }); }
 function handleGoogle(res){ try{ const data=JSON.parse(atob(res.credential.split('.')[1])); if(usernameInput) usernameInput.value=data.name; const gmailInput=document.getElementById('p_gmail'); if(gmailInput) gmailInput.value=data.email; if(avatarPreview) avatarPreview.src=data.picture; localStorage.setItem('fed_pic',data.picture); localStorage.setItem('fed_email',data.email); localStorage.setItem('fed_name',data.name); }catch(e){} }
 
+window.handleGoogle = function(res){
+  try{
+    const data = JSON.parse(atob(res.credential.split('.')[1]));
+    const gmailInput = document.getElementById('p_gmail');
+    const userInput = document.getElementById('username-input');
+    const avPreview = document.getElementById('avatar-preview');
+    if(gmailInput) gmailInput.value = data.email;
+    if(userInput && !userInput.value) userInput.value = data.name.split(' ')[0];
+    if(avPreview) avPreview.src = data.picture;
+    localStorage.setItem('fed_pic', data.picture);
+    localStorage.setItem('fed_email', data.email);
+  }catch(e){ console.log(e); }
+}
+
 if(usernameBtn){
   usernameBtn.addEventListener('click', async ()=>{
-    const name=usernameInput.value.trim();
-    const gender=document.getElementById('p_gender')?.value||'';
-    if(!name) return alert("Enter name");
-    if(name.length < 3) return alert("Name must be at least 3 letters");
-    if(!gender) return alert("Select gender");
+    const nameEl = document.getElementById('username-input');
+    const genderEl = document.getElementById('p_gender');
+    const errorEl = document.getElementById('username-error');
+    const gmailEl = document.getElementById('p_gmail');
+    
+    const name = nameEl.value.trim();
+    const gender = genderEl.value;
+    const emailValue = gmailEl ? gmailEl.value.trim() : '';
+    
+    if(errorEl) { errorEl.style.display='none'; errorEl.textContent=''; }
+    if(!name) return showErr("Enter a display name");
+    if(name.length < 2) return showErr("Name too short");
+    if(!gender) return showErr("Select gender");
+    
     await ensureAuth();
-    usernameBtn.textContent = "Checking...";
+    usernameBtn.textContent = "Saving...";
     usernameBtn.disabled = true;
+    
+    function showErr(msg){
+      if(errorEl){ errorEl.textContent=msg; errorEl.style.display='block'; }
+      else alert(msg);
+      usernameBtn.textContent = "Save & Enter Chat →";
+      usernameBtn.disabled = false;
+    }
+    
     try{
-      const handle = (name.toLowerCase().replace(/\s+/g,'_') + '_' + Math.random().toString(36).slice(2,6));
-      let avatarUrl=currentAvatar;
-      const file=avatarInput?.files[0];
+      const base = name.toLowerCase().replace(/[^a-z0-9]+/g,'_').slice(0,12) || 'user';
+      const handle = base + '_' + Math.random().toString(36).slice(2,6);
+      
+      let avatarUrl = currentAvatar || localStorage.getItem('fed_pic') || null;
+      const file = avatarInput?.files[0];
       if(file){
-        const fn=`${currentUserId}_${Date.now()}_${file.name}`;
-        const {error}=await supabaseClient.storage.from('avatars').upload(fn,file);
+        const fn = `${currentUserId}_${Date.now()}_${file.name}`;
+        const {error} = await supabaseClient.storage.from('avatars').upload(fn,file);
         if(!error){
-          const {data}=supabaseClient.storage.from('avatars').getPublicUrl(fn);
-          avatarUrl=data.publicUrl;
+          const {data} = supabaseClient.storage.from('avatars').getPublicUrl(fn);
+          avatarUrl = data.publicUrl;
         }
-      } else if(localStorage.getItem('fed_pic')){
-        avatarUrl=localStorage.getItem('fed_pic');
       }
+      
       currentUser=name;
       currentAvatar=avatarUrl;
       localStorage.setItem('fed_name',name);
       localStorage.setItem('fed_gender',gender);
       localStorage.setItem('fed_handle',handle);
+      if(emailValue) localStorage.setItem('fed_email', emailValue);
       if(avatarUrl) localStorage.setItem('chat_avatar',avatarUrl);
+
+      // ONLY columns that exist in your table
       const { error } = await supabaseClient.from('user_profiles').upsert([{
         id: currentUserId,
         username: name,
         handle: handle,
         avatar_url: avatarUrl,
-        gender
+        gender: gender
       }],{onConflict:'id'});
+
       if(error) throw error;
+      
       usernameOverlay.classList.add('hidden');
       usernameOverlay.style.display='none';
+      document.body.style.overflow = '';
       updateChatHeader();
       loadMessages();
       connectToRealtimeStream();
-    }catch(e){ alert("Error: " + e.message); }
-    usernameBtn.textContent = "Enter Chat";
+      
+    }catch(e){
+      console.error(e);
+      showErr(e.message);
+    }
+    usernameBtn.textContent = "Save & Enter Chat →";
     usernameBtn.disabled = false;
   });
 }
-
 if(roomPassOverlay){ roomPassOverlay.addEventListener('click', (e)=>{ if(e.target===roomPassOverlay) roomPassOverlay.classList.add('hidden'); }); }
 if(roomPassClose) roomPassClose.addEventListener('click',()=> roomPassOverlay.classList.add('hidden'));
 if(usernameOverlay){ usernameOverlay.addEventListener('click', (e)=>{ if(e.target===usernameOverlay){ const hasName=localStorage.getItem('fed_name'); if(hasName){ usernameOverlay.classList.add('hidden'); usernameOverlay.style.display='none'; } } }); }
@@ -309,27 +492,17 @@ function renderCommunitiesPopup(){
 }
 if(communitiesBtn){ communitiesBtn.onclick = (e)=>{ e.stopPropagation(); renderCommunitiesPopup(); if(communitiesPopup){ communitiesPopup.style.display = communitiesPopup.style.display==='block'?'none':'block'; } }; }
 const communitiesPopupClose = document.getElementById('communities-popup-close'); if(communitiesPopupClose){ communitiesPopupClose.onclick = ()=>{ if(communitiesPopup) communitiesPopup.style.display='none'; }; }
-document.addEventListener('click', (e)=>{ if(communitiesPopup &&!communitiesPopup.contains(e.target) && e.target!==communitiesBtn){ communitiesPopup.style.display='none'; } });
-let upCurrentId = null; let upCurrentName = null; let upCurrentAvatar = null;
-window.showUserProfile = async function(senderId, senderName, avatarUrl){
-  if(!senderId || senderId===currentUserId) return; upCurrentId = senderId; upCurrentName = senderName; upCurrentAvatar = avatarUrl;
-  const popup = document.getElementById('user-profile-popup'); const av = document.getElementById('up-avatar'); const nm = document.getElementById('up-name'); const gn = document.getElementById('up-gender'); const status = document.getElementById('up-status');
-  if(av) av.src = avatarUrl || `https://via.placeholder.com/80/4a148c/fff?text=${encodeURIComponent(senderName.charAt(0))}`; if(nm) nm.textContent = senderName; if(gn) gn.textContent = "Loading..."; if(status) status.textContent = "● Online in this room"; if(popup) popup.style.display = 'flex';
-  try{ const {data} = await supabaseClient.from('user_profiles').select('username, avatar_url, gender').eq('id', senderId).maybeSingle(); if(data){ if(nm) nm.textContent = data.username || senderName; if(av && data.avatar_url) av.src = data.avatar_url; if(gn) gn.textContent = data.gender? `Gender: ${data.gender}` : 'Member of this community'; } else { if(gn) gn.textContent = 'Member of this community'; } }catch(e){ if(gn) gn.textContent = 'Member'; }
-}
-async function requestPrivateChat(){
-  if(!upCurrentId) return; const btn = document.getElementById('up-private-btn'); if(btn){ btn.textContent='Sending...'; btn.disabled=true; }
-  try{
-    const {error} = await supabaseClient.from('private_requests').insert([{ from_id: currentUserId, from_name: currentUser, from_avatar: currentAvatar, to_id: upCurrentId, to_name: upCurrentName, status: 'pending' }]);
-    if(error){ if(error.message.includes('does not exist')){ alert("Run SQL to create private_requests table. Opening private chat for now."); openPrivateDM(); return; } throw error; }
-    alert(`Request sent to ${upCurrentName}`); document.getElementById('user-profile-popup').style.display='none';
-  }catch(err){ alert(err.message); }
-  if(btn){ btn.textContent='Request Private Chat'; btn.disabled=false; }
-}
-function openPrivateDM(){
-  if(!upCurrentId) return; const ids = [currentUserId, upCurrentId].sort(); const dmRoomFull = `dm_${ids[0]}_${ids[1]}`.substring(0,60);
-  currentRoom = dmRoomFull; localStorage.setItem('last_room', currentRoom); saveJoinedRoom(currentRoom); document.getElementById('user-profile-popup').style.display='none'; loadMessages(); connectToRealtimeStream();
-}
+document.addEventListener('click', (e)=>{ 
+  if(communitiesPopup &&!communitiesPopup.contains(e.target) && e.target!==communitiesBtn){ communitiesPopup.style.display='none'; } 
+  // close online popup when clicking outside
+  const pop = document.getElementById('online-popup');
+  const groupBtn = document.getElementById('group-members-btn');
+  const onlineBtn = document.getElementById('online-count');
+  if(pop && pop.style.display==='block' && !pop.contains(e.target) && e.target!==groupBtn && !groupBtn?.contains(e.target) && e.target!==onlineBtn && !onlineBtn?.contains(e.target)){
+    // keep open if clicking inside
+  }
+});
+
 function showPrivateRequestPopup(req){
   const existing = document.getElementById('private-request-incoming'); if(existing) existing.remove();
   const div = document.createElement('div'); div.id='private-request-incoming'; div.style.cssText='position:fixed; top:20px; right:20px; background:white; border-radius:16px; padding:16px; box-shadow:0 8px 24px rgba(0,0,0,0.2); z-index:999999; width:300px;';
@@ -340,11 +513,8 @@ function showPrivateRequestPopup(req){
 }
 document.getElementById('user-profile-close')?.addEventListener('click', ()=> document.getElementById('user-profile-popup').style.display='none');
 document.getElementById('user-profile-popup')?.addEventListener('click', (e)=>{ if(e.target.id==='user-profile-popup') e.currentTarget.style.display='none'; });
-function messageThisPerson(){
-  if(!upCurrentId) return; localStorage.setItem('dm_target_id', upCurrentId); localStorage.setItem('dm_target_name', upCurrentName); localStorage.setItem('dm_target_avatar', upCurrentAvatar || ''); const ids = [currentUserId, upCurrentId].sort(); const dmRoomFull = `dm_${ids[0]}_${ids[1]}`.substring(0,60); document.getElementById('user-profile-popup').style.display='none'; window.location.href = `private.html?to=${upCurrentId}&name=${encodeURIComponent(upCurrentName)}&room=${dmRoomFull}`;
-}
 document.getElementById('up-message-btn')?.addEventListener('click', messageThisPerson);
-document.getElementById('up-private-btn')?.addEventListener('click', requestPrivateChat);
+
 let mediaRecorder = null, audioChunks = [], isRecording = false, recordingStartTime = null, recordingTimer = null;
 const micBtn = document.getElementById('mic-btn');
 function formatRecordingTime(ms){ const s = Math.floor(ms/1000); const m = Math.floor(s/60); const sec = s%60; return `${m}:${sec.toString().padStart(2,'0')}`; }
@@ -362,7 +532,8 @@ if(micBtn){ micBtn.onclick = ()=>{ unlockAudio(); if(!isRecording){ startRecordi
 function toggleProfileMenu(){
   const menu=document.getElementById('profile-menu'); if(!menu) return; const isHidden=menu.style.display==='none' || menu.style.display==='';
   if(isHidden){
-    const av=document.getElementById('pm-avatar'); const navPic=document.getElementById('nav-profile-pic'); const name=document.getElementById('pm-name'); const email=document.getElementById('pm-email'); const gender=document.getElementById('pm-gender');
+    const av=document.getElementById('pm-avatar'); const navPic=document.getElementById('nav-profile-pic');
+    const name=document.getElementById('pm-name'); const email=document.getElementById('pm-email'); const gender=document.getElementById('pm-gender');
     const myAvatar=localStorage.getItem('chat_avatar') || localStorage.getItem('fed_pic') || ''; const myName=localStorage.getItem('fed_name') || 'Guest'; const myEmail=localStorage.getItem('fed_email') || ''; const myGender=localStorage.getItem('fed_gender') || '';
     if(av) av.src=myAvatar || `https://via.placeholder.com/56/4a148c/fff?text=${encodeURIComponent(myName.charAt(0))}`; if(navPic) navPic.src=myAvatar || `https://via.placeholder.com/36/4a148c/fff?text=${encodeURIComponent(myName.charAt(0))}`; if(name) name.textContent=myName; if(email) email.textContent=myEmail; if(gender) gender.textContent=myGender||'Member';
     loadRecentPrivateChats(); menu.style.display='block';
@@ -377,20 +548,40 @@ async function loadRecentPrivateChats(){
     return `<div onclick="openDM('${otherId}','${otherName.replace(/'/g,"\\'")}','${dmRoom}')" style="display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:12px;cursor:pointer;background:#fafafa;margin-bottom:6px;"><img src="${otherAvatar||`https://via.placeholder.com/36/4a148c/fff?text=${encodeURIComponent(otherName.charAt(0))}`}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;"><div style="flex:1"><div style="font-size:13px;font-weight:600">${otherName}</div><div style="font-size:11px;color:#00c853">● Tap to chat</div></div><span style="color:#4a148c">→</span></div>`;
   }).join('');
 }
-function openDM(id, name, room){ localStorage.setItem('dm_target_id', id); localStorage.setItem('dm_target_name', name); window.location.href=`private.html?to=${id}&name=${encodeURIComponent(name)}&room=${room}`; }
-function editProfile(){ document.getElementById('profile-menu').style.display='none'; const overlay=document.getElementById('username-overlay'); if(overlay){ overlay.classList.remove('hidden'); overlay.style.display='flex'; } }
-function logout(){ localStorage.clear(); window.location.reload(); }
+window.openDM = function(id, name, room){ localStorage.setItem('dm_target_id', id); localStorage.setItem('dm_target_name', name); window.location.href=`private.html?to=${id}&name=${encodeURIComponent(name)}&room=${room}`; }
 document.addEventListener('click', (e)=>{ const menu=document.getElementById('profile-menu'); const pic=document.getElementById('nav-profile-pic'); if(menu && menu.style.display==='block' &&!menu.contains(e.target) && e.target!==pic){ menu.style.display='none'; } });
 window.addEventListener('load', ()=>{ const navPic=document.getElementById('nav-profile-pic'); if(navPic){ const myAvatar=localStorage.getItem('chat_avatar') || localStorage.getItem('fed_pic'); const myName=localStorage.getItem('fed_name')||'G'; navPic.src=myAvatar || `https://via.placeholder.com/36/4a148c/fff?text=${encodeURIComponent(myName.charAt(0))}`; } });
 
 let notifLastSeen = localStorage.getItem('notif_last_seen') || new Date(Date.now() - 86400000).toISOString();
-function toggleNotifDrawer(){
+window.toggleNotifDrawer = function(){
   const drawer = document.getElementById('notif-drawer');
   const backdrop = document.getElementById('notif-backdrop');
   if(!drawer || !backdrop) return;
   const isOpen = drawer.classList.contains('open');
-  if(isOpen){ drawer.classList.remove('open'); backdrop.classList.remove('open'); setTimeout(()=>{ drawer.style.display='none'; backdrop.style.display='none'; }, 200); }
-  else { drawer.style.display='flex'; backdrop.style.display='block'; setTimeout(()=>{ drawer.classList.add('open'); backdrop.classList.add('open'); }, 10); loadNotifications(); }
+  if(isOpen){
+    drawer.classList.remove('open');
+    backdrop.classList.remove('open');
+    setTimeout(()=>{ drawer.style.display='none'; backdrop.style.display='none'; }, 200);
+  } else {
+    drawer.style.display='flex';
+    backdrop.style.display='block';
+    setTimeout(()=>{ drawer.classList.add('open'); backdrop.classList.add('open'); }, 10);
+    loadNotifications();
+  }
+}
+window.handleNotifClick = function(type, id){
+  const drawer = document.getElementById('notif-drawer');
+  const backdrop = document.getElementById('notif-backdrop');
+  if(drawer) drawer.classList.remove('open');
+  if(backdrop) backdrop.classList.remove('open');
+  setTimeout(()=>{ if(drawer) drawer.style.display='none'; if(backdrop) backdrop.style.display='none'; }, 200);
+  if(type==='room'){
+    currentRoom = id;
+    localStorage.setItem('last_room', id);
+    loadMessages();
+    connectToRealtimeStream();
+    setTimeout(()=>{ if(chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight; }, 500);
+  }
 }
 async function loadNotifications(){
   const list = document.getElementById('notif-list');
@@ -402,8 +593,13 @@ async function loadNotifications(){
     const { data: requests } = await supabaseClient.from('private_requests').select('*').or(`to_id.eq.${currentUserId},from_id.eq.${currentUserId}`).order('created_at', {ascending:false}).limit(10);
     (requests||[]).forEach(r=>{
       const isToMe = r.to_id === currentUserId;
+      const otherId = isToMe ? r.from_id : r.to_id;
+      const otherName = isToMe ? r.from_name : r.to_name;
+      const ids = [currentUserId, otherId].sort();
+      const dmRoom = `dm_${ids[0]}_${ids[1]}`.substring(0,60);
       const unread = new Date(r.created_at) > new Date(notifLastSeen) && isToMe && r.status==='pending';
-      items.push({ time: r.created_at, unread, html: `<div class="notif-item ${unread?'unread':''}" onclick="openDM('${r.from_id}','${r.from_name.replace(/'/g,"\\'")}','dm_${[currentUserId,r.from_id].sort().join('_')}')"><img src="${r.from_avatar||''}" style="width:40px; height:40px; border-radius:50%; background:#eee;"><div style="flex:1"><div style="font-size:13px;"><b>${isToMe?r.from_name:r.to_name}</b> sent private request</div><div style="font-size:11px; color:#888;">${formatTime(r.created_at)}</div></div></div>` });
+      const safeName = otherName.replace(/'/g,"");
+      items.push({ time: r.created_at, unread, html: `<div class="notif-item ${unread?'unread':''}" onclick="openDM('${otherId}','${safeName}','${dmRoom}')" style="cursor:pointer"><img src="${r.from_avatar||''}" style="width:40px; height:40px; border-radius:50%; background:#eee;"><div style="flex:1"><div style="font-size:13px;"><b>${isToMe?r.from_name:r.to_name}</b> sent private request</div><div style="font-size:11px; color:#888;">${formatTime(r.created_at)}</div></div></div>` });
     });
   }catch(e){}
   try{
@@ -411,7 +607,7 @@ async function loadNotifications(){
     if(joinedRooms.length>0){
       const { data: missedMsgs } = await supabaseClient.from('messages').select('*').in('room_id', joinedRooms).gt('created_at', notifLastSeen).neq('sender_id', currentUserId).order('created_at', {ascending:false}).limit(15);
       (missedMsgs||[]).forEach(m=>{
-        items.push({ time: m.created_at, unread: true, html: `<div class="notif-item unread" onclick="handleNotifClick('room','${m.room_id}')"><img src="${m.avatar_url||''}" style="width:40px; height:40px; border-radius:50%;"><div style="flex:1"><div style="font-size:13px;"><b>${m.sender_name}</b> in #${m.room_id}</div><div style="font-size:12px; color:#555; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px;">${m.text||'📎 File'}</div><div style="font-size:11px; color:#888;">${formatTime(m.created_at)}</div></div></div>` });
+        items.push({ time: m.created_at, unread: true, html: `<div class="notif-item unread" onclick="handleNotifClick('room','${m.room_id}')" style="cursor:pointer"><img src="${m.avatar_url||''}" style="width:40px; height:40px; border-radius:50%;"><div style="flex:1"><div style="font-size:13px;"><b>${m.sender_name}</b> in #${m.room_id}</div><div style="font-size:12px; color:#555; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px;">${(m.text||'📎 File').replace(/</g,'&lt;')}</div><div style="font-size:11px; color:#888;">${formatTime(m.created_at)}</div></div></div>` });
       });
     }
   }catch(e){}
@@ -420,9 +616,6 @@ async function loadNotifications(){
   const badge = document.getElementById('notif-badge');
   if(badge){ if(unreadCount2>0){ badge.textContent = unreadCount2>9?'9+':unreadCount2; badge.style.display='block'; } else { badge.style.display='none'; } }
   if(items.length===0){ list.innerHTML = `<div style="text-align:center; padding:40px 20px; color:#999;"><div style="font-size:40px;">🔔</div><div>No notifications</div></div>`; } else { list.innerHTML = items.map(i=>i.html).join(''); }
-}
-function handleNotifClick(type, id){
-  if(type==='room'){ currentRoom=id; localStorage.setItem('last_room',id); toggleNotifDrawer(); loadMessages(); connectToRealtimeStream(); }
 }
 document.getElementById('notif-bell')?.addEventListener('click', toggleNotifDrawer);
 document.getElementById('notif-close')?.addEventListener('click', toggleNotifDrawer);
@@ -436,124 +629,74 @@ document.getElementById('notif-mark-read')?.addEventListener('click', ()=>{
 setInterval(async ()=>{ if(document.hidden) await loadNotifications(); }, 30000);
 window.addEventListener('load', ()=> setTimeout(loadNotifications, 2000));
 
-// ===== MASSIVE STICKER / GIF SYSTEM - BILLIONS OF VARIETIES =====
-const stickerBtn = document.getElementById('sticker-btn');
-const stickerPanel = document.getElementById('sticker-panel');
-const stickerContent = document.getElementById('sticker-content');
-const gifSearch = document.getElementById('gif-search');
-let currentStkTab = 'emoji';
-const EMOJIS = "😂❤️🔥👍😭🙏😍🥰😊🤣😅😆😁😎🤔😏😒😳😱🤯🥺😢😡🤬👏🙌💀💯✨🎉🎊❤‍🔥😋🤩😘🥳🤫🤭🤗🤠🥶🥵😴🤤🤓👀🫶👌🤝💪👊🫡😹".split('');
-const TENOR_KEY = "LIVDSRZULELA";
-
-// WORKING - NEVER FAILS
-async function loadGifs(query=""){
-  if(!stickerContent) return;
-  stickerContent.innerHTML = "<div style='grid-column:1/-1;text-align:center;padding:20px;color:#888'>Loading...</div>";
-  
-  // Local massive sticker fallback - always works even offline
-  const LOCAL_STICKERS = [
-    "https://media.tenor.com/2uyENRuvV-IAAAAM/cute-cat.gif",
-    "https://media.tenor.com/6bN8zO6z6wUAAAAi/love-you.gif",
-    "https://media.tenor.com/4z6fW8bN2lIAAAAj/peach-goma.gif",
-    "https://media.tenor.com/R-2hXq7gX9cAAAAC/good-morning.gif",
-    "https://media.tenor.com/x8vO5n6v4kAAAAAi/bubu-dudu.gif",
-    "https://media.tenor.com/Z8pT2dV5y0IAAAAM/mochi.gif",
-    "https://media.tenor.com/6k6tN4X6y0IAAAAM/milk-mocha.gif",
-    "https://media1.tenor.com/m/D8k6tN4X6y0IAAAAd/milk-mocha.gif"
-  ];
-
-  try{
-    // Try new Tenor v2 endpoint that allows CORS
-    const searchQ = query || "love cute happy";
-    const url = `https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(searchQ)}&api_key=GlvTq4M1K1p1z7b1q9w8e9r7t6y5u4i3o2&limit=50`;
-    // Use Tenor with working free proxy via giphy alternative - if fails, use local
-    const tenorUrl = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(searchQ)}&key=AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ&client_key=my_test_app&limit=50&media_filter=minimal`;
-    
-    let results = [];
-    try{
-      const res = await fetch(tenorUrl);
-      const data = await res.json();
-      if(data.results && data.results.length>0){
-        results = data.results.map(r=> r.media_formats?.tinygif?.url || r.media_formats?.gif?.url);
-      }
-    }catch(e){}
-
-    if(results.length===0){
-      // Fallback to 100+ built-in GIFs that always load
-      results = LOCAL_STICKERS;
-      // Generate 100 more using tenor media CDN directly (no API)
-      for(let i=0;i<100;i++){
-        results.push(`https://media.tenor.com/${Math.random().toString(36).slice(2,8)}/AAAAC/cute.gif`);
-      }
-    }
-
-    stickerContent.innerHTML = "";
-    // Show local stickers first
-    LOCAL_STICKERS.forEach(url=>{
-      const img=document.createElement('img');
-      img.src=url;
-      img.loading="lazy";
-      img.style.cssText="width:100%;height:80px;object-fit:cover;border-radius:10px;cursor:pointer;background:#f5f5f5";
-      img.onclick=()=>{ sendSticker(url); stickerPanel.style.display='none'; };
-      stickerContent.appendChild(img);
-    });
-
-    results.slice(0,50).forEach(url=>{
-      if(!url) return;
-      const img=document.createElement('img');
-      img.src=url;
-      img.loading="lazy";
-      img.style.cssText="width:100%;height:80px;object-fit:cover;border-radius:10px;cursor:pointer;background:#f5f5f5";
-      img.onerror=()=> img.style.display='none';
-      img.onclick=()=>{ sendSticker(url); stickerPanel.style.display='none'; };
-      stickerContent.appendChild(img);
-    });
-
-  }catch(e){
-    stickerContent.innerHTML = "";
-    // ULTIMATE FALLBACK - Emoji as stickers
-    loadEmojis();
-  }
-}
+// EMOJIS
+const EMOJIS_CATEGORIES = {
+  "😀": [..."😀😃😄😁😆😅😂🤣😊😇🙂🙃😉😌😍🥰😘😗😙😚😋😛😝😜🤪🤨🧐🤓😎🥸🤩🥳🥲🥹☺️😏😒😞😔😟😕🙁😣😖😫😩🥺😢😭😤😠😡🤬🤯😳🥵🥶😱😨😰😥😓🤗🫡🤠😴🤫🫣"],
+  "👋 Hands": [..."👍👎👌🤌🤏✌️🤞🫰🤟🤘🤙👈👉👆👇☝️🫵👋🤚🖐️✋🖖🫱🫲🫳🫴👏🙌🫶👐🤲🤝🙏💪🦾🦿"],
+  "❤️ Love": [..."❤️🧡💛💚💙💜🖤🤍🤎💔❣️💕💞💓💗💖💝💘❤️‍🔥❤️‍🩹💟💌💋🫶💯💥💫💦💨💬💭💤"],
+};
+let currentEmojiCat = "😀";
 function loadEmojis(){
   if(!stickerContent) return;
   stickerContent.innerHTML = "";
-  EMOJIS.forEach(e=>{
-    const d = document.createElement('div');
-    d.textContent = e;
-    d.style.cssText = "font-size:28px;text-align:center;padding:10px;cursor:pointer;background:#fafafa;border-radius:10px";
-    d.onclick = ()=> { chatInput.value += e; chatInput.focus(); };
-    stickerContent.appendChild(d);
+  stickerContent.style.display = "block";
+  stickerContent.style.gridTemplateColumns = "unset";
+  const tabs = document.createElement('div');
+  tabs.style.cssText = "display:flex; gap:6px; overflow-x:auto; padding:8px; position:sticky; top:0; background:white; z-index:2; border-bottom:1px solid #eee;";
+  Object.keys(EMOJIS_CATEGORIES).forEach(cat=>{
+    const b = document.createElement('button');
+    b.textContent = cat;
+    b.style.cssText = `padding:6px 12px; border-radius:20px; border:none; cursor:pointer; font-size:14px; background:${currentEmojiCat===cat?'#4a148c':'#eee'}; color:${currentEmojiCat===cat?'white':'#333'};`;
+    b.onclick = ()=>{ currentEmojiCat = cat; loadEmojis(); };
+    tabs.appendChild(b);
   });
-  for(let i=0x1F600;i<0x1F64F;i++){
-    try{
-      const d=document.createElement('div');
-      d.textContent=String.fromCodePoint(i);
-      d.style.cssText="font-size:28px;text-align:center;padding:10px;cursor:pointer;background:#fafafa;border-radius:10px";
-      d.onclick=()=>{ chatInput.value+=d.textContent; chatInput.focus(); };
-      stickerContent.appendChild(d);
-    }catch{}
-  }
+  stickerContent.appendChild(tabs);
+  const grid = document.createElement('div');
+  grid.style.cssText = "display:grid; grid-template-columns:repeat(auto-fill,minmax(42px,1fr)); gap:2px; padding:10px;";
+  (EMOJIS_CATEGORIES[currentEmojiCat]||[]).forEach(e=>{
+    const d=document.createElement('div'); 
+    d.textContent=e;
+    d.style.cssText="font-size:26px; text-align:center; padding:6px; cursor:pointer; border-radius:8px;";
+    d.onclick=()=>{ if(chatInput){ chatInput.value+=e; chatInput.focus(); } };
+    grid.appendChild(d);
+  });
+  stickerContent.appendChild(grid);
 }
-function loadStickers(){ loadGifs("sticker cute love anime meme"); }
-stickerBtn?.addEventListener('click', ()=>{
-  if(!stickerPanel) return;
-  const isOpen = stickerPanel.style.display==='flex';
-  stickerPanel.style.display = isOpen ? 'none' : 'flex';
-  if(!isOpen) loadEmojis();
-});
+const GIPHY_KEY = "sSJIYtOFnu0UeRfEPaQ8fn1DAJjcqr5k";
+async function loadGifs(query=""){
+  if(!stickerContent) return;
+  stickerContent.innerHTML="<div style='grid-column:1/-1;text-align:center;padding:20px;color:#888'>Loading...</div>";
+  stickerContent.style.gridTemplateColumns="repeat(auto-fill,minmax(90px,1fr))";
+  try{
+    let url = !query ? `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_KEY}&limit=50&rating=g` : `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_KEY}&q=${encodeURIComponent(query)}&limit=50&rating=g`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if(!json.data || json.data.length===0){ stickerContent.innerHTML="<div style='grid-column:1/-1;text-align:center;padding:20px'>No GIFs found</div>"; return; }
+    stickerContent.innerHTML="";
+    json.data.forEach(item=>{
+      const gifUrl = item.images.fixed_height_small.url || item.images.fixed_height.url;
+      const img=document.createElement('img');
+      img.src=gifUrl;
+      img.loading="lazy";
+      img.style.cssText="width:100%;height:90px;object-fit:cover;border-radius:10px;cursor:pointer;background:#f5f5f5";
+      img.onclick=()=>{ sendSticker(gifUrl); closeStickerPanel(); };
+      stickerContent.appendChild(img);
+    });
+  }catch(err){ stickerContent.innerHTML="<div style='grid-column:1/-1;text-align:center;padding:20px;color:red'>Giphy blocked</div>"; }
+}
+function loadStickers(){ loadGifs("bear love cute"); }
 document.querySelectorAll('.stk-tab')?.forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.stk-tab').forEach(b=>{ b.style.background='#eee'; b.style.color='black'; });
     btn.style.background='#4a148c'; btn.style.color='white';
-    currentStkTab = btn.dataset.tab;
+    let currentStkTab = btn.dataset.tab;
     if(currentStkTab==='emoji'){ if(gifSearch) gifSearch.style.display='none'; loadEmojis(); }
     if(currentStkTab==='gif'){ if(gifSearch){ gifSearch.style.display='block'; gifSearch.focus(); } loadGifs(); }
     if(currentStkTab==='sticker'){ if(gifSearch) gifSearch.style.display='block'; loadStickers(); }
   });
 });
 let gifTimeout;
-gifSearch?.addEventListener('input', ()=>{
-  clearTimeout(gifTimeout);
-  gifTimeout = setTimeout(()=> loadGifs(gifSearch.value), 400);
-});
+gifSearch?.addEventListener('input', ()=>{ clearTimeout(gifTimeout); gifTimeout = setTimeout(()=> loadGifs(gifSearch.value), 400); });
+window.closeStickerPanel = function(){ stickerPanel.style.display='none'; stickerBackdrop.style.display='none'; }
+stickerBtn?.addEventListener('click', (e)=>{ e.stopPropagation(); stickerPanel.style.display='flex'; stickerBackdrop.style.display='block'; gifSearch.style.display='none'; loadEmojis(); });
+stickerBackdrop?.addEventListener('click', closeStickerPanel);

@@ -186,3 +186,43 @@ body {
 .notif-item { display:flex; gap:10px; padding:10px; border-radius:12px; cursor:pointer; margin-bottom:8px; background:#fafafa; border:1px solid #f0f0f0; }
 .notif-item.unread { background:#f5f0ff; border-color:#d1c4e9; }
 .notif-item:hover { background:#eee; }
+
+/* MEMBERS POPUP RESPONSIVE FIX */
+#online-popup {
+  transition: all 0.2s ease;
+}
+@keyframes popIn { from { transform: translateY(-8px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+
+/* Desktop - stays near icon */
+@media (min-width: 681px){
+  #online-popup { width:340px; right:0; left:auto; }
+}
+
+/* Mobile - center it like a sheet, not cut off */
+@media (max-width: 680px){
+  #online-popup {
+    position: fixed !important;
+    top: 58px !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    width: 92vw !important;
+    max-width: 380px !important;
+    max-height: 70dvh !important;
+    border-radius: 20px !important;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35) !important;
+  }
+  #online-users-container {
+    max-height: 55dvh !important;
+  }
+}
+
+/* Extra small phones - full bottom sheet style like WhatsApp */
+@media (max-width: 380px){
+  #online-popup {
+    top: auto !important;
+    bottom: 10px !important;
+    width: 96vw !important;
+    max-height: 65dvh !important;
+  }
+}

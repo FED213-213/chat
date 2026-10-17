@@ -30,7 +30,7 @@
     .bottom-bar { background:#f7f7f7; padding:8px 10px; display:flex; gap:6px; align-items:center; flex-shrink:0; border-top:1px solid #e0e0e0; }
     .bottom-bar button.icon-btn { width:42px; height:42px; border-radius:50%; border:none; background:transparent; font-size:20px; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
     #chat-input { flex:1; min-width:0; padding:12px 16px; border-radius:24px; border:1px solid #ddd; outline:none; font-size:16px; background:white; }
-    #send-btn { background:#4a148c; color:white; border:none; padding:11px 20px; border-radius:24px; cursor:pointer; flex-shrink:0; font-weight:700; font-size:14px; }
+    #send-btn { background:#4a148c; color:white; border:none; padding:12px 15px; border-radius:50%; cursor:pointer; flex-shrink:0; font-weight:700; font-size:14px; }
     @media (max-width: 680px){ #menu-toggle{ display:flex; } #general-btn, #room-input, #join-btn{ display:none; } }
     .hidden { display:none!important; }
     #notif-drawer.open{display:flex!important; animation:slideIn .3s ease}
@@ -58,7 +58,30 @@
       🔔
       <span id="notif-badge" style="display:none; position:absolute; top:-4px; right:-4px; background:#ff1744; color:white; font-size:11px; font-weight:bold; min-width:18px; height:18px; border-radius:9px; text-align:center; line-height:18px; padding:0 4px;">0</span>
     </button>
-    <div id="online-count"><span class="dot"></span><span id="online-number">0</span></div>
+
+    <!-- YOUR EXISTING ONLINE BUTTON + POPUP - KEPT -->
+    <div style="position:relative; display:inline-block;">
+      <div id="online-count" onclick="toggleOnlinePopup()" style="cursor:pointer;">
+        <span class="dot"></span>
+        <span id="online-number">0</span>
+      </div>
+<!-- REPLACE YOUR EXISTING online-popup div -->
+<div id="online-popup" style="display:none; position:absolute; top:48px; right:0; background:white; width:340px; max-width:90vw; border-radius:18px; box-shadow:0 16px 40px rgba(0,0,0,0.28); z-index:99999; overflow:hidden; border:1px solid #eee; animation:popIn .2s ease;">
+  <div style="padding:14px 16px; font-weight:800; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; color:#1a1a1a; font-size:14px; background:#fafafa;">
+    <span id="popup-title">👥 0 members</span>
+    <button onclick="toggleOnlinePopup()" style="cursor:pointer; background:#eee; border:none; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:50%; font-size:12px;">✕</button>
+  </div>
+  <div id="online-users-container" style="max-height:50vh; overflow-y:auto; padding:6px; -webkit-overflow-scrolling:touch;"></div>
+</div>
+    </div>
+    <!-- END EXISTING -->
+
+    <!-- NEW: GROUP MEMBERS ICON IN NAV - ADDED -->
+    <button id="group-members-btn" onclick="toggleOnlinePopup()" class="top-icon" type="button" title="Group members" style="position:relative;">
+      🧑‍🤝‍🧑
+      <span id="group-count-badge" style="position:absolute; top:-4px; right:-4px; background:#00e676; color:#000; font-size:10px; font-weight:800; min-width:16px; height:16px; border-radius:9px; text-align:center; line-height:16px; padding:0 3px; display:none; border:2px solid #4a148c;">0</span>
+    </button>
+
     <button id="communities-btn" class="top-icon" type="button">👥</button>
     <button id="change-profile-btn" class="top-icon" type="button">⚙️</button>
     <img id="nav-profile-pic" src="" style="width:36px; height:36px; border-radius:50%; cursor:pointer; background:#fff; border:2px solid rgba(255,255,255,0.5)" onclick="toggleProfileMenu()" title="My Private Chats">
@@ -88,10 +111,8 @@
 
 <div id="reply-preview" class="hidden" style="display:flex; background:#fff3e0; padding:10px;"><div style="flex:1;"><div id="reply-to-name" style="font-size:12px; font-weight:800; color:#4a148c;"></div><div id="reply-to-text" style="font-size:12px;"></div></div><button id="reply-cancel" type="button" style="background:#eee; border:none; width:32px; height:32px; border-radius:50%;">×</button></div>
 
-<!-- STICKER BACKDROP - CLICK OUTSIDE TO CLOSE -->
 <div id="sticker-backdrop"></div>
 
-<!-- STICKER PANEL -->
 <div id="sticker-panel" style="display:none;position:absolute;bottom:60px;left:0;right:0;background:white;border-top:1px solid #ddd;height:340px;z-index:9998;flex-direction:column">
   <div style="display:flex;gap:8px;padding:10px;border-bottom:1px solid #eee;align-items:center">
     <button class="stk-tab active" data-tab="emoji" style="padding:8px 12px;background:#4a148c;color:white;border:none;border-radius:8px;cursor:pointer">😊 Emoji</button>
@@ -109,10 +130,9 @@
   <button id="sticker-btn" class="icon-btn" type="button">😊</button>
   <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off">
   <button id="mic-btn" class="icon-btn" type="button">🎤</button>
-  <button id="send-btn" type="button">Send</button>
+  <button id="send-btn" type="button">➤</button>
 </div>
 
-<!-- PROFILE MENU - THIS IS WHAT YOUR RED MARKED PIC OPENS -->
 <div id="profile-menu">
   <div style="padding:16px;display:flex;gap:12px;align-items:center;border-bottom:1px solid #eee">
     <img id="pm-avatar" style="width:48px;height:48px;border-radius:50%;object-fit:cover;background:#eee">
@@ -125,7 +145,6 @@
   </div>
 </div>
 
-<!-- COMMUNITIES POPUP - FIXED -->
 <div id="communities-popup">
   <div style="padding:14px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee">
     <span>Joined Communities</span><span id="communities-popup-close" style="cursor:pointer">✕</span>
@@ -133,9 +152,80 @@
   <div id="communities-list-popup" style="padding:8px;overflow-y:auto;max-height:400px"></div>
 </div>
 
-<div id="username-overlay" style="position:fixed; inset:0; background:rgba(0,0,0,0.75); display:flex; z-index:10000; align-items:center; justify-content:center;"><div style="background:white; width:92%; max-width:380px; padding:22px; border-radius:18px;"><h3 style="text-align:center;">Set Your Profile</h3><img id="avatar-preview" src="https://via.placeholder.com/100/4a148c/ffffff?text=?" style="width:80px; height:80px; border-radius:50%; display:block; margin:0 auto;"><input type="file" id="avatar-input" accept="image/*" style="margin:10px 0; width:100%;"><input type="text" id="username-input" placeholder="Display name *required" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; margin:6px 0;"><select id="p_gender" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; margin:6px 0;"><option value="">Gender *required</option><option value="male">Male</option><option value="female">Female</option><option value="notsay">Prefer not to say</option></select><input type="email" id="p_gmail" placeholder="Gmail (optional)" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; margin:6px 0;"><button id="username-btn" type="button" style="width:100%; margin-top:12px; background:#4a148c; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold;">Save & Enter Chat</button></div></div>
+<div id="username-overlay" style="position:fixed; inset:0; background:rgba(18,8,33,0.88); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); display:flex; z-index:10000; align-items:center; justify-content:center; padding:12px; overflow-y:auto;">
+  <div style="background:#fff; width:100%; max-width:380px; max-height:90dvh; overflow-y:auto; padding:22px 18px; border-radius:22px; box-shadow:0 20px 60px rgba(0,0,0,0.4); margin:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;">
+    
+    <!-- Header -->
+    <div style="text-align:center; margin-bottom:16px;">
+      <div style="width:64px; height:64px; background:linear-gradient(135deg,#4a148c,#7c4dff); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 10px; font-size:28px;">💜</div>
+      <h2 style="margin:0; font-size:19px; font-weight:800; color:#1a1a1a; line-height:1.2;">Welcome to Private Chat</h2>
+      <p style="margin:6px 0 0; color:#777; font-size:12px;">Set up your profile to continue</p>
+    </div>
 
-<div id="room-pass-overlay" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:9999; display:none;"><div style="background:white; padding:20px; border-radius:16px; width:92%; max-width:340px;"><h3 id="room-pass-title">Enter Password</h3><p id="room-pass-desc"></p><input type="password" id="room-pass-input" placeholder="Room password" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ddd;"><p id="room-pass-error" style="color:red;"></p><div style="display:flex; gap:8px;"><button id="room-pass-close">Cancel</button><button id="room-pass-btn">Join Room</button></div></div></div>
+    <img id="avatar-preview" src="https://ui-avatars.com/api/?name=?&background=4a148c&color=fff" style="width:76px; height:76px; border-radius:50%; display:block; margin:0 auto 14px; border:3px solid #f5f0ff; object-fit:cover;">
+
+    <!-- GOOGLE -->
+    <div id="g_id_onload" data-client_id="995545702819-e5ch8shht6ir1r46bdgckhtvih7br2lm.apps.googleusercontent.com" data-context="signin" data-ux_mode="popup" data-callback="handleGoogle" data-auto_prompt="false"></div>
+    <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="outline" data-text="signin_with" data-size="large" data-logo_alignment="left" style="width:100%;"></div>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <div style="display:flex; align-items:center; gap:10px; margin:14px 0;"><div style="flex:1; height:1px; background:#eee;"></div><span style="font-size:10px; color:#aaa; font-weight:700; letter-spacing:0.5px;">OR CONTINUE WITH</span><div style="flex:1; height:1px; background:#eee;"></div></div>
+
+    <!-- Form -->
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div>
+        <label style="font-size:10px; font-weight:700; color:#666; margin:0 0 4px 4px; display:block; letter-spacing:0.5px;">PROFILE PHOTO</label>
+        <input type="file" id="avatar-input" accept="image/*" style="width:100%; font-size:13px; color:#555; padding:8px; background:#fafafa; border:1px solid #eee; border-radius:10px;">
+      </div>
+
+      <div>
+        <input type="text" id="username-input" placeholder="Display name (e.g. Zero)" autocomplete="name" style="width:100%; padding:13px 14px; border-radius:12px; border:1.5px solid #e5e0ef; font-size:16px; outline:none; -webkit-appearance:none;">
+        <div style="font-size:10px; color:#999; margin:4px 0 0 4px;">Same name allowed — we auto-add @tag</div>
+      </div>
+
+      <select id="p_gender" style="width:100%; padding:13px 14px; border-radius:12px; border:1.5px solid #e5e0ef; font-size:16px; outline:none; background:white; -webkit-appearance:none;">
+        <option value="">Select Gender</option>
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+        <option value="notsay">Prefer not to say</option>
+      </select>
+
+      <input type="email" id="p_gmail" placeholder="Email (from Google)" readonly style="width:100%; padding:13px 14px; border-radius:12px; border:1.5px solid #f0f0f0; font-size:16px; background:#fafafa; outline:none;">
+    </div>
+
+    <button id="username-btn" type="button" style="width:100%; margin-top:16px; background:#4a148c; color:white; border:none; padding:15px; border-radius:12px; cursor:pointer; font-weight:800; font-size:16px; letter-spacing:0.2px;">Save & Enter Chat →</button>
+    <p id="username-error" style="color:#ff1744; font-size:12px; text-align:center; margin:10px 0 0; display:none; line-height:1.4; word-break:break-word;"></p>
+
+    <p style="text-align:center; font-size:10px; color:#aaa; margin:12px 0 0;">By continuing, you agree to our community guidelines</p>
+  </div>
+</div>
+
+<style>
+  #username-overlay * { box-sizing: border-box; }
+  #username-overlay input:focus, #username-overlay select:focus {
+    border-color:#4a148c !important; box-shadow:0 0 0 3px #f5f0ff;
+  }
+  /* Prevent iOS zoom on inputs */
+  @media screen and (max-width: 768px) {
+    #username-overlay input, #username-overlay select {
+      font-size:16px !important;
+    }
+    #username-overlay > div {
+      width:94% !important;
+      max-width:94% !important;
+      padding:20px 16px !important;
+      max-height:92dvh !important;
+      border-radius:20px !important;
+    }
+  }
+  @media screen and (max-height: 600px) {
+    #username-overlay { align-items:flex-start; padding-top:20px; padding-bottom:20px; }
+  }
+  @keyframes pop{from{transform:scale(.96); opacity:0} to{transform:scale(1); opacity:1}}
+  #username-overlay > div { animation:pop .25s ease; }
+  /* Hide scrollbar but keep scroll */
+  #username-overlay > div::-webkit-scrollbar { width:0; }
+</style>
 
 <div id="notif-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.3); z-index:99998;"></div>
 <div id="notif-drawer" style="display:none; position:fixed; top:0; right:0; width:360px; max-width:90vw; height:100vh; background:white; z-index:99999; box-shadow:-4px 0 24px rgba(0,0,0,0.15); flex-direction:column;">
@@ -175,8 +265,6 @@ if(drawerClose) drawerClose.addEventListener('click', closeDrawer);
 if(drawerBackdrop) drawerBackdrop.addEventListener('click', closeDrawer);
 document.getElementById('drawer-general')?.addEventListener('click', ()=>{ document.getElementById('general-btn')?.click(); closeDrawer(); });
 document.getElementById('drawer-join')?.addEventListener('click', ()=>{ const val=document.getElementById('drawer-room-input').value.trim(); document.getElementById('room-input').value=val; document.getElementById('join-btn')?.click(); closeDrawer(); });
-
-// Close panels when clicking outside
 document.getElementById('sticker-backdrop')?.addEventListener('click', ()=>{ document.getElementById('sticker-panel').style.display='none'; document.getElementById('sticker-backdrop').style.display='none'; });
 </script>
 </body>
